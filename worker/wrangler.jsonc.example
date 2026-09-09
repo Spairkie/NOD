@@ -4,7 +4,7 @@
   "main": "src/index.js",
   "compatibility_date": "2026-09-01",
   "vars": {
-    "APP_ORIGINS": "https://YOUR_GITHUB_USERNAME.github.io",
+    "APP_ORIGINS": "https://spairkie.github.io",
     "CREATE_LIMIT_PER_HOUR": "20",
     "ALLOWED_HOSTS": ""
   },
