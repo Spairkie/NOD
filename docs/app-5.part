@@ -1,0 +1,36 @@
+.strokeStyle=dark?'#d8d4c8':'#6b685f';
+      for(const p of particles){
+        p.px=p.x;p.py=p.y; const a=field(p.x,p.y,t); let speed=p.s;
+        const dx=p.x-pointer.x,dy=p.y-pointer.y,dist=Math.hypot(dx,dy);
+        if(dist<160){ p.x += dx/Math.max(dist,1)*.35; p.y += dy/Math.max(dist,1)*.35; }
+        p.x += Math.cos(a)*speed; p.y += Math.sin(a)*speed; p.life++;
+        if(p.x<0||p.x>w||p.y<0||p.y>h||p.life>1200){p.x=Math.random()*w;p.y=Math.random()*h;p.px=p.x;p.py=p.y;p.life=0}
+        ctx.beginPath();ctx.moveTo(p.px,p.py);ctx.lineTo(p.x,p.y);ctx.stroke();
+      }
+      requestAnimationFrame(frame);
+    }
+    addEventListener('resize',resize,{passive:true}); addEventListener('pointermove',e=>{pointer.x=e.clientX;pointer.y=e.clientY},{passive:true});
+    resize();requestAnimationFrame(frame);
+  }
+
+  function detectDevice() {
+    const ua = navigator.userAgent;
+    if (/iPad|Tablet|PlayBook|Silk/i.test(ua)) return 'tablet';
+    if (/Mobi|Android|iPhone/i.test(ua)) return 'mobile';
+    return 'desktop';
+  }
+  function safeHost(value) { try { return new URL(value).hostname.replace(/^www\./,''); } catch { return value; } }
+  function formatNumber(value) { return new Intl.NumberFormat('en-US',{notation:value>=10000?'compact':'standard',maximumFractionDigits:1}).format(value); }
+  function formatShortDate(iso) { return new Intl.DateTimeFormat('en-US',{month:'short',day:'numeric'}).format(new Date(iso)); }
+  function formatRelative(iso) {
+    const diff = Date.now() - new Date(iso).getTime();
+    const days = Math.floor(diff/864e5); if(days<=0) return 'Today'; if(days===1) return 'Yesterday'; if(days<7) return `${days}d ago`; return formatShortDate(iso);
+  }
+  function titleCase(s){return s ? s[0].toUpperCase()+s.slice(1) : s;}
+  function escapeHtml(value=''){ return String(value).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+  function escapeAttr(value=''){ return escapeHtml(value).replace(/'/g,'&#39;'); }
+  async function copyText(text, message='Copied') { try { await navigator.clipboard.writeText(text); toast(message); } catch { const ta=document.createElement('textarea');ta.value=text;document.body.append(ta);ta.select();document.execCommand('copy');ta.remove();toast(message); } }
+  function toast(message,type='') { const el=document.createElement('div');el.className=`toast ${type}`;el.textContent=message;$('#toast-stack').append(el);setTimeout(()=>{el.style.opacity='0';el.style.transform='translateY(5px)';setTimeout(()=>el.remove(),220)},2600); }
+
+  init();
+})();
