@@ -2,9 +2,9 @@
 
 **Short links. Long memory.**
 
-![NOD hero preview](./assets/nod-preview.webp)
+![NOD hero preview](./assets/nod-preview.svg)
 
-![NOD analytics preview](./assets/nod-dashboard.webp)
+![NOD analytics preview](./assets/nod-dashboard.svg)
 
 NOD is a portfolio-grade URL shortener built as a crafted creative tool rather than a generic SaaS dashboard. The front end is zero-dependency static HTML/CSS/JavaScript and can be published directly from GitHub Pages. An optional Cloudflare Worker + D1 backend turns the portfolio demo into globally shareable short links with privacy-aware click analytics.
 
@@ -24,26 +24,30 @@ NOD is a portfolio-grade URL shortener built as a crafted creative tool rather t
 ```text
 /docs                 GitHub Pages front end
   index.html
-  styles.css
-  app.js
   config.js
+  styles-loader.js
+  styles-*.part
+  app-loader.js
+  app-*.part
 /worker               Optional real redirect + analytics backend
   src/index.js
   migrations/0001_init.sql
   wrangler.jsonc.example
+/assets               README preview artwork
 RESEARCH.md            Product / architecture research
 SECURITY.md            Deployment threat model and safe defaults
 README.md
 LICENSE
 ```
 
+The front-end source is loaded from small text chunks so the repository can be written safely through the GitHub connector. The loaders concatenate those chunks in the browser before executing the original tested CSS and JavaScript.
+
 ## 1) Publish the portfolio version on GitHub Pages
 
-1. Push this repo to GitHub.
-2. Open **Settings → Pages**.
-3. Under **Build and deployment**, choose **Deploy from a branch**.
-4. Select your default branch and the **`/docs`** folder.
-5. Save.
+1. Open **Settings → Pages**.
+2. Under **Build and deployment**, choose **Deploy from a branch**.
+3. Select `main` and the **`/docs`** folder.
+4. Save.
 
 No npm install, framework build, or CI configuration is required.
 
@@ -109,10 +113,10 @@ window.__NOD_CONFIG__ = {
 };
 ```
 
-Also set `APP_ORIGINS` in `worker/wrangler.jsonc` to your exact GitHub Pages origin, for example:
+Also set `APP_ORIGINS` in `worker/wrangler.jsonc` to your GitHub Pages origin:
 
 ```text
-https://yourname.github.io
+https://spairkie.github.io
 ```
 
 ### Recommended for a public deployment: Turnstile
@@ -151,14 +155,12 @@ For a public portfolio deployment, read [SECURITY.md](./SECURITY.md) and strongl
 
 ## Customize it for your portfolio
 
-The most important edits are in `docs/index.html` and the CSS variables at the top of `docs/styles.css`.
+The most important edits are in `docs/index.html`, `docs/config.js`, and the front-end bundle parts under `/docs`.
 
 Suggested personalizations:
 
-- Replace NOD with your preferred project name.
-- Change the footer attribution / portfolio copy.
 - Point `SHORT_DOMAIN` at a short custom domain after connecting one to the Worker.
-- Replace the sample workspace entries inside `sampleLinks` in `docs/app.js` with projects you want to showcase.
+- Replace the sample workspace entries with projects you want to showcase.
 - Add a case-study link from your portfolio project card to `RESEARCH.md` or a polished write-up.
 
 ## Research
