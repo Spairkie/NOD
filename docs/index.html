@@ -62,7 +62,7 @@
       <div class="hero-footnote">
         <span>Built for clarity</span>
         <span>Privacy-aware analytics</span>
-        <span>Edge-ready architecture</span>
+        <span>Global edge routing</span>
       </div>
     </section>
 
@@ -75,7 +75,7 @@
         </div>
         <div class="mode-chip" id="mode-chip" title="Current data mode">
           <span class="mode-dot"></span>
-          <span id="mode-label">Local portfolio mode</span>
+          <span id="mode-label">Connecting…</span>
         </div>
       </div>
 
@@ -128,7 +128,7 @@
           </div>
           <div class="field-group utm-field" id="utm-field" hidden>
             <label for="utm-source">Source</label>
-            <input id="utm-source" maxlength="50" placeholder="portfolio" />
+            <input id="utm-source" maxlength="50" placeholder="campaign" />
             <small>Appends <code>utm_source</code> before shortening.</small>
           </div>
         </div>
@@ -160,8 +160,8 @@
           <h2 id="links-title">A useful signal,<br>not a wall of charts.</h2>
         </div>
         <div class="dashboard-controls">
-          <button class="quiet-btn" id="reset-demo" type="button">Reset demo</button>
-          <button class="quiet-btn" id="export-links" type="button">Export JSON</button>
+          <button class="quiet-btn" id="reset-demo" type="button" hidden>Reset demo</button>
+          <button class="quiet-btn" id="export-links" type="button">Export private backup</button>
         </div>
       </div>
 
@@ -198,7 +198,7 @@
             <span aria-hidden="true">⌕</span>
             <input id="link-search" type="search" placeholder="Search links, labels, destinations…" aria-label="Search links" />
           </div>
-          <div class="library-meta"><span id="link-count">0 links</span><span class="sample-badge" id="sample-badge">Sample workspace</span></div>
+          <div class="library-meta"><span id="link-count">0 links</span><span class="sample-badge" id="sample-badge">Workspace</span></div>
         </div>
         <div class="link-table-head" aria-hidden="true"><span>Link</span><span>Destination</span><span>Clicks</span><span>Created</span><span></span></div>
         <div class="link-list" id="link-list"></div>
@@ -220,7 +220,7 @@
         <article><span>01</span><h3>Fast before fancy</h3><p>The first useful action stays obvious. Advanced controls remain one gesture away, not one screen in the way.</p></article>
         <article><span>02</span><h3>Readable by default</h3><p>Every short link can carry meaning through a deliberate slug, label, and destination preview.</p></article>
         <article><span>03</span><h3>Measure without spying</h3><p>The production backend records coarse country, device, referrer, and time—never visitor IPs in the app database.</p></article>
-        <article><span>04</span><h3>Portable architecture</h3><p>Static UI on GitHub Pages. Edge redirect service and SQLite-compatible analytics on Cloudflare when you want real sharing.</p></article>
+        <article><span>04</span><h3>Edge by design</h3><p>The studio stays static and fast while Cloudflare handles globally shareable redirects, persistence, and click intelligence at the edge.</p></article>
       </div>
       <div class="architecture-strip">
         <div><span>01</span><strong>GitHub Pages</strong><small>Static studio</small></div>
@@ -235,7 +235,7 @@
   <footer class="site-footer">
     <div class="footer-brand">NOD</div>
     <p>Short links, beautifully composed.</p>
-    <div class="footer-meta"><span>Portfolio project</span><span>Built by Hans Sai</span><a href="#top">Back to top ↑</a></div>
+    <div class="footer-meta"><span>Independent product</span><span>Built by Hans Sai</span><a href="#top">Back to top ↑</a></div>
   </footer>
 
   <dialog class="details-dialog" id="details-dialog">
