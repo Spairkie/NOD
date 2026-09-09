@@ -1,0 +1,18 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "nod-edge",
+  "main": "src/index.js",
+  "compatibility_date": "2026-09-01",
+  "vars": {
+    "APP_ORIGINS": "https://YOUR_GITHUB_USERNAME.github.io",
+    "CREATE_LIMIT_PER_HOUR": "20",
+    "ALLOWED_HOSTS": ""
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "nod-links",
+      "database_id": "PASTE_YOUR_D1_DATABASE_ID"
+    }
+  ]
+}
