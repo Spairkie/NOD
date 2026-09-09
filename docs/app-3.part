@@ -1,0 +1,141 @@
+expiresAt: payload.expiresAt || null, clicks: 0, events: [], sample: false,
+      shortUrl: `${location.origin}${location.pathname}#/r/${encodeURIComponent(slug)}`
+    };
+  }
+
+  async function createRemoteLink(payload) {
+    const headers = { 'Content-Type': 'application/json', Accept: 'application/json' };
+    if (CONFIG.TURNSTILE_SITE_KEY) {
+      const token = window.__nodTurnstileToken || '';
+      if (!token) throw new Error('Complete the human verification before creating a public link.');
+      headers['X-Turnstile-Token'] = token;
+    }
+    const res = await fetch(`${API_BASE}/api/links`, {
+      method: 'POST', headers, body: JSON.stringify(payload)
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || `Could not create link (${res.status})`);
+    if (window.turnstile && window.__nodTurnstileWidgetId !== undefined) {
+      window.turnstile.reset(window.__nodTurnstileWidgetId);
+      window.__nodTurnstileToken = '';
+    }
+    return normalizeRemoteLink(data.link || data);
+  }
+
+  function showResult(link) {
+    const card = $('#result-card');
+    const shortUrl = link.shortUrl || localShortUrl(link.slug);
+    $('#result-link').textContent = displayShortUrl(shortUrl, link.slug);
+    $('#result-link').href = shortUrl;
+    $('#result-destination').textContent = link.url;
+    card.dataset.linkId = link.id;
+    card.hidden = false;
+    card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  function displayShortUrl(url, slug) {
+    if (!REMOTE_MODE && url.includes('#/r/')) return `${SHORT_DOMAIN}/${slug}`;
+    try { return new URL(url).host.replace(/^www\./,'') + new URL(url).pathname; } catch { return url; }
+  }
+
+  function localShortUrl(slug) {
+    return REMOTE_MODE ? `https://${SHORT_DOMAIN}/${slug}` : `${location.origin}${location.pathname}#/r/${encodeURIComponent(slug)}`;
+  }
+
+  function onResultAction(e) {
+    const action = e.target?.dataset?.resultAction;
+    if (!action) return;
+    const link = state.links.find(l => l.id === $('#result-card').dataset.linkId);
+    if (action === 'details' && link) openDetails(link);
+    if (action === 'new') {
+      $('#long-url').value = '';
+      $('#custom-slug').value = '';
+      $('#link-title').value = '';
+      $('#result-card').hidden = true;
+      updateUrlStatus();
+      $('#long-url').focus();
+      $('#studio').scrollIntoView({ behavior: 'smooth' });
+    }
+  }
+
+  function renderAll() {
+    renderMetrics();
+    renderLinkList();
+  }
+
+  function visibleLinks() {
+    if (!state.query) return state.links;
+    return state.links.filter(link => [link.slug, link.title, link.url].join(' ').toLowerCase().includes(state.query));
+  }
+
+  function renderLinkList() {
+    const links = visibleLinks();
+    const list = $('#link-list');
+    $('#link-count').textContent = `${state.links.length} ${state.links.length === 1 ? 'link' : 'links'}`;
+    $('#sample-badge').textContent = state.links.some(l => l.sample) ? (state.links.some(l => !l.sample) ? 'Sample + your links' : 'Sample workspace') : 'Your workspace';
+    $('#empty-state').hidden = links.length > 0;
+    list.innerHTML = links.map(link => {
+      const expired = link.expiresAt && new Date(link.expiresAt) < new Date();
+      return `<article class="link-row" data-id="${escapeAttr(link.id)}">
+        <div class="link-primary">
+          <div class="link-slug"><span class="status" style="${expired ? 'background:var(--accent)' : ''}"></span>${escapeHtml(SHORT_DOMAIN)}/${escapeHtml(link.slug)}</div>
+          <div class="link-title">${escapeHtml(link.title || safeHost(link.url))}${link.sample ? ' · sample' : ''}</div>
+        </div>
+        <div class="link-destination" title="${escapeAttr(link.url)}">${escapeHtml(link.url)}</div>
+        <div class="link-clicks">${formatNumber(Number(link.clicks || 0))}</div>
+        <div class="link-date">${formatRelative(link.createdAt)}</div>
+        <button class="row-menu" type="button" data-action="details" aria-label="Open details for ${escapeAttr(link.slug)}">↗</button>
+      </article>`;
+    }).join('');
+  }
+
+  function renderMetrics() {
+    const links = state.links;
+    const totalClicks = links.reduce((sum, l) => sum + Number(l.clicks || 0), 0);
+    const active = links.filter(l => !l.expiresAt || new Date(l.expiresAt) > new Date()).length;
+    $('#metric-clicks').textContent = formatNumber(totalClicks);
+    $('#metric-links').textContent = formatNumber(active);
+    $('#metric-clicks-note').textContent = links.some(l => l.sample) ? 'Portfolio preview + local activity' : 'Across all links';
+    $('#active-track').style.width = `${links.length ? Math.round(active / links.length * 100) : 0}%`;
+
+    const events = links.flatMap(l => (l.events || []));
+    const deviceCounts = { mobile: 0, desktop: 0, tablet: 0 };
+    events.forEach(e => { if (deviceCounts[e.device] !== undefined) deviceCounts[e.device]++; });
+    const sortedDevices = Object.entries(deviceCounts).sort((a,b) => b[1] - a[1]);
+    const top = sortedDevices[0];
+    $('#metric-device').textContent = top && top[1] ? titleCase(top[0]) : '—';
+    $('#metric-device-note').textContent = top && top[1] ? `${Math.round(top[1] / Math.max(events.length,1) * 100)}% of observed clicks` : 'No events yet';
+    $('#device-bars').innerHTML = sortedDevices.map(([name, count]) => `<div class="device-bar"><span>${titleCase(name)}</span><i style="--pct:${events.length ? Math.round(count/events.length*100) : 0}%"></i><b>${events.length ? Math.round(count/events.length*100) : 0}%</b></div>`).join('');
+
+    const last24 = events.filter(e => Date.now() - new Date(e.at).getTime() < 864e5).length;
+    $('#metric-pulse').textContent = last24 > 40 ? 'Lively' : last24 > 8 ? 'Active' : last24 > 0 ? 'Gentle' : 'Quiet';
+    $('#metric-pulse-note').textContent = `${last24} clicks in the last 24h`;
+    $('#pulse-dots').innerHTML = Array.from({length:16}, (_,i) => `<i class="${i < Math.min(16, Math.ceil(last24/3)) ? 'hot' : ''}"></i>`).join('');
+
+    renderSparkline(events);
+  }
+
+  function renderSparkline(events) {
+    const days = 14;
+    const buckets = Array(days).fill(0);
+    events.forEach(e => {
+      const age = Math.floor((Date.now() - new Date(e.at).getTime()) / 864e5);
+      if (age >= 0 && age < days) buckets[days - 1 - age]++;
+    });
+    if (!buckets.some(Boolean)) buckets[buckets.length - 1] = 1;
+    const max = Math.max(...buckets, 1);
+    const w = 320, h = 96;
+    const pts = buckets.map((v,i) => [i/(days-1)*w, h - (v/max)*(h-18) - 4]);
+    const line = smoothPath(pts);
+    const area = `${line} L ${w} ${h} L 0 ${h} Z`;
+    $('#sparkline').innerHTML = `<path class="area" d="${area}"/><path class="line" d="${line}"/>`;
+  }
+
+  function smoothPath(points) {
+    if (points.length < 2) return '';
+    let d = `M ${points[0][0]} ${points[0][1]}`;
+    for (let i=1;i<points.length;i++) {
+      const [x0,y0] = points[i-1], [x1,y1] = points[i];
+      const cx = (x0+x1)/2;
+      d += ` C ${cx} ${y0}, ${cx} ${y1}, ${x1} ${y1}`;
+    }
