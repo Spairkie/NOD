@@ -19,19 +19,27 @@ No Cloudflare secret is committed to the repository.
 
 ## One-time setup
 
-### 1. Create a scoped Cloudflare API token
+### 1. Create a scoped Cloudflare **user API token**
 
-In the Cloudflare dashboard, create a custom API token scoped only to the account that will host NOD.
+In the Cloudflare dashboard, go to **My Profile → API Tokens → Create Token**. Use a user API token rather than an Account API token because Turnstile currently does not support account-owned API tokens.
 
-Give it these **Account** permissions:
+The easiest starting point is the **Edit Cloudflare Workers** template; then modify it so the token is limited to the single Cloudflare account that will host NOD and add the missing D1 and Turnstile permissions.
+
+The workflow needs these permissions for that account:
 
 - **Workers Scripts — Edit**
 - **D1 — Edit**
-- **Turnstile — Edit**
+- **Turnstile — Edit** (the API may describe this permission as **Turnstile Sites Write**)
 
-Do not use your Global API Key.
+If the Workers template also includes **Account Settings — Read**, leave that read-only permission enabled because Wrangler may use account metadata during deployment.
 
-### 2. Add two GitHub Actions secrets
+Do not use your Global API Key. The token secret is shown only once, so put it directly into GitHub Actions secrets rather than committing it to the repository.
+
+### 2. Copy your Cloudflare account ID
+
+In the Cloudflare dashboard you can use global search (`Ctrl/Cmd + K`) and choose **Copy account ID**, or open **Workers & Pages** and copy the Account ID from **Account Details**.
+
+### 3. Add two GitHub Actions secrets
 
 Open this repository on GitHub, then go to:
 
@@ -40,9 +48,9 @@ Open this repository on GitHub, then go to:
 Create:
 
 - `CLOUDFLARE_ACCOUNT_ID` — your Cloudflare account ID.
-- `CLOUDFLARE_API_TOKEN` — the scoped token from step 1.
+- `CLOUDFLARE_API_TOKEN` — the scoped user API token from step 1.
 
-### 3. Run the deployment
+### 4. Run the deployment
 
 Open:
 
