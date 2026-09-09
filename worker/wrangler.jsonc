@@ -1,0 +1,20 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "nod-edge",
+  "main": "src/index.js",
+  "compatibility_date": "2026-09-09",
+  "workers_dev": true,
+  "observability": {
+    "enabled": true
+  },
+  "vars": {
+    "APP_ORIGINS": "https://spairkie.github.io",
+    "CREATE_LIMIT_PER_HOUR": "20",
+    "ALLOWED_HOSTS": ""
+  },
+  "d1_databases": [
+    {
+      "binding": "DB"
+    }
+  ]
+}
