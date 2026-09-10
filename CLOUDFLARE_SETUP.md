@@ -1,87 +1,50 @@
 # NOD Cloudflare production setup
 
-NOD is already prepared for production. The repository workflow provisions the Cloudflare resources and connects the GitHub Pages front end automatically.
+NOD is deployed as a single Cloudflare product: the Worker serves the static studio, API, D1-backed analytics, and `/<slug>` redirects from the same hostname. GitHub Pages remains a mirror of the studio rather than the canonical runtime.
 
-## What the workflow creates
+## Current production
 
-Running **Deploy NOD to Cloudflare** will:
+- Canonical studio and short-link origin: `https://nod-edge.saihanswissle.workers.dev/`
+- GitHub Pages mirror: `https://spairkie.github.io/NOD/`
+- Worker: `nod-edge`
+- D1 binding: `DB`
+- Turnstile: managed widget for both production hosts
+- Deployment: `.github/workflows/deploy-cloudflare.yml`
 
-1. Create or reuse a managed Cloudflare Turnstile widget for `spairkie.github.io`.
-2. Generate the private rate-limit salt at deploy time.
-3. Deploy the `nod-edge` Cloudflare Worker.
-4. Automatically provision the Worker's D1 binding.
-5. Apply the D1 migrations in `worker/migrations/`.
-6. Verify the deployed Worker's health endpoint.
-7. Write the real Worker URL and Turnstile site key into `docs/config.js`.
-8. Commit that public configuration back to `main`, which causes GitHub Pages to publish the production-connected UI.
+A request for `/` or a real static asset is served by Cloudflare Workers Static Assets. `/api/*` and unknown single-segment paths fall through to `worker/src/index.js`, where API requests and short-link redirects are handled.
 
-No Cloudflare secret is committed to the repository.
+## GitHub Actions credentials
 
-## One-time setup
+The repository already expects these Actions secrets:
 
-### 1. Create a scoped Cloudflare **user API token**
+- `CLOUDFLARE_ACCOUNT_ID`
+- `CLOUDFLARE_API_TOKEN`
 
-In the Cloudflare dashboard, go to **My Profile → API Tokens → Create Token**. Use a user API token rather than an Account API token because Turnstile currently does not support account-owned API tokens.
+The Cloudflare user API token needs account-scoped access for Workers Scripts, D1, and Turnstile. Keep the token in GitHub Actions secrets; never put it in the repository or client configuration.
 
-The easiest starting point is the **Edit Cloudflare Workers** template; then modify it so the token is limited to the single Cloudflare account that will host NOD and add the missing D1 and Turnstile permissions.
+## Automated deployment
 
-The workflow needs these permissions for that account:
+Changes to `docs/**`, `worker/**`, or the Cloudflare workflow trigger **Deploy NOD to Cloudflare**. The workflow validates the production assets, updates Turnstile hostnames, prepares the public client config, deploys the Worker and static studio, applies D1 migrations, verifies `/api/health`, verifies the studio assets, and keeps the GitHub Pages mirror current.
 
-- **Workers Scripts — Edit**
-- **D1 — Edit**
-- **Turnstile — Edit** (the API may describe this permission as **Turnstile Sites Write**)
+The rate-limit salt and Turnstile secret are deployed as Worker secrets. `docs/config.js` contains only public values: the API base URL, public short hostname, and Turnstile site key.
 
-If the Workers template also includes **Account Settings — Read**, leave that read-only permission enabled because Wrangler may use account metadata during deployment.
+## Domain migration
 
-Do not use your Global API Key. The token secret is shown only once, so put it directly into GitHub Actions secrets rather than committing it to the repository.
+The current `workers.dev` hostname is functional but intentionally temporary branding. When you obtain a domain that is in an active Cloudflare zone, attach the desired hostname to `nod-edge` as a Worker Custom Domain.
 
-### 2. Copy your Cloudflare account ID
+The preferred final shape is:
 
-In the Cloudflare dashboard you can use global search (`Ctrl/Cmd + K`) and choose **Copy account ID**, or open **Workers & Pages** and copy the Account ID from **Account Details**.
+```text
+https://short-domain.example/          NOD studio
+https://short-domain.example/abc123    NOD redirect
+https://short-domain.example/api/...   NOD API
+```
 
-### 3. Add two GitHub Actions secrets
+No D1 data migration is required. Update these items together:
 
-Open this repository on GitHub, then go to:
+1. the Worker Custom Domain;
+2. `SHORT_DOMAIN` / `API_BASE_URL` in the generated client config;
+3. `APP_ORIGINS` in `worker/wrangler.jsonc`; and
+4. the Turnstile widget's allowed hostnames.
 
-**Settings → Secrets and variables → Actions → New repository secret**
-
-Create:
-
-- `CLOUDFLARE_ACCOUNT_ID` — your Cloudflare account ID.
-- `CLOUDFLARE_API_TOKEN` — the scoped user API token from step 1.
-
-### 4. Run the deployment
-
-Open:
-
-**Actions → Deploy NOD to Cloudflare → Run workflow**
-
-Choose `main` and run it.
-
-A successful run will show the GitHub Pages URL, the Worker URL, Turnstile status, and D1 migration status in the workflow summary.
-
-## After the first deployment
-
-Visit:
-
-`https://spairkie.github.io/NOD/`
-
-The status chip should say **Edge backend connected**. Newly created NOD links will use your `nod-edge.<workers-subdomain>.workers.dev/<slug>` address and will work globally, not only in the browser where they were created.
-
-The browser stores the private management key for each link locally so it can retrieve statistics and delete that link. Use **Export private backup** if you want to preserve those management keys before clearing browser data or moving to another device.
-
-## Production resources
-
-The production source of truth is:
-
-- `worker/wrangler.jsonc` — Worker settings, D1 binding, CORS origin and observability.
-- `worker/src/index.js` — create, redirect, stats, delete, Turnstile and rate-limit logic.
-- `worker/migrations/` — versioned D1 schema.
-- `.github/workflows/deploy-cloudflare.yml` — production provisioning and deployment.
-- `docs/config.js` — public runtime endpoint configuration; updated automatically by the workflow.
-
-## Custom short domain
-
-The first deployment intentionally uses the Cloudflare-provided `workers.dev` hostname so NOD can become functional without buying or transferring a domain.
-
-Once you own a short domain, attach that hostname to `nod-edge` in Cloudflare and then set `SHORT_DOMAIN` in `docs/config.js` to the custom hostname. The API can remain on the Worker URL or move to the same custom hostname.
+The deployment workflow should remain the only place that handles production endpoint synchronization.
