@@ -172,7 +172,7 @@ async function sha256(value) {
 
 async function checkRateLimit(request, env) {
   const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
-  const salt = env.RATE_LIMIT_SALT || 'nod-public-demo';
+  const salt = env.RATE_LIMIT_SALT || 'nod-rate-limit-v1';
   const key = await sha256(`${salt}:${ip}`);
   const windowMs = 60 * 60 * 1000;
   const current = Date.now();
