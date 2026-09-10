@@ -135,6 +135,16 @@ jobs:
           echo "Worker health check failed"
           exit 1
 
+      - name: Assemble stable Pages assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat docs/styles-1.part docs/styles-2.part docs/styles-3.part docs/styles-4.part > /tmp/nod-styles.css
+          cat docs/app-1.part docs/app-2.part docs/app-3.part docs/app-4.part docs/app-5.part > /tmp/nod-app.js
+          test -s /tmp/nod-styles.css
+          test -s /tmp/nod-app.js
+          node --check /tmp/nod-app.js
+
       - name: Connect GitHub Pages to production
         shell: bash
         env:
@@ -158,20 +168,22 @@ jobs:
             git fetch origin main
             git reset --hard origin/main
             cp /tmp/nod-config.js docs/config.js
-            git add docs/config.js
+            cp /tmp/nod-styles.css docs/styles.css
+            cp /tmp/nod-app.js docs/app.js
+            git add docs/config.js docs/styles.css docs/app.js
 
             if git diff --cached --quiet; then
-              echo "GitHub Pages is already connected to this Worker."
+              echo "GitHub Pages assets and production config are already current."
               exit 0
             fi
 
-            git commit -m "Connect NOD to Cloudflare production"
+            git commit -m "Build stable NOD Pages assets"
             if git push origin HEAD:main; then
               exit 0
             fi
           done
 
-          echo "Could not update docs/config.js after three attempts."
+          echo "Could not update production Pages assets after three attempts."
           exit 1
 
       - name: Remove temporary secret file
@@ -191,4 +203,5 @@ jobs:
             echo "- Edge API: $WORKER_URL"
             echo "- Turnstile: enabled"
             echo "- D1: provisioned and migrated"
+            echo "- Pages assets: stable CSS + JS bundles"
           } >> "$GITHUB_STEP_SUMMARY"
