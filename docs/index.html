@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#f2efe7" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 64 64%27%3E%3Crect width=%2764%27 height=%2764%27 rx=%2716%27 fill=%27%23121310%27/%3E%3Ccircle cx=%2717%27 cy=%2732%27 r=%276%27 fill=%27%23f2efe7%27/%3E%3Ccircle cx=%2732%27 cy=%2732%27 r=%276%27 fill=%27%23ff5b3a%27/%3E%3Ccircle cx=%2747%27 cy=%2732%27 r=%276%27 fill=%27%23f2efe7%27/%3E%3C/svg%3E" />
-  <meta name="description" content="NOD — a crafted URL shortener and link intelligence studio." />
+  <meta name="description" content="NOD — create short links and understand what happens after the click." />
   <meta property="og:title" content="NOD — Link Studio" />
   <meta property="og:description" content="Short links. Long memory." />
   <title>NOD — Link Studio</title>
@@ -73,7 +73,7 @@
           <p class="eyebrow">Create a path</p>
           <h2 id="studio-title">One field to start.<br>Everything else when you need it.</h2>
         </div>
-        <div class="mode-chip" id="mode-chip" title="Current data mode">
+        <div class="mode-chip" id="mode-chip" title="Service status">
           <span class="mode-dot"></span>
           <span id="mode-label">Connecting…</span>
         </div>
@@ -107,7 +107,7 @@
           <div class="field-group">
             <label for="link-title">Label</label>
             <input id="link-title" name="title" maxlength="80" placeholder="September launch" />
-            <small>Only visible in your dashboard.</small>
+            <small>Only visible in your workspace.</small>
           </div>
           <div class="field-group">
             <label for="expiry">Expiry</label>
@@ -160,8 +160,7 @@
           <h2 id="links-title">A useful signal,<br>not a wall of charts.</h2>
         </div>
         <div class="dashboard-controls">
-          <button class="quiet-btn" id="reset-demo" type="button" hidden>Reset demo</button>
-          <button class="quiet-btn" id="export-links" type="button">Export private backup</button>
+          <button class="quiet-btn" id="export-links" type="button">Back up access keys</button>
         </div>
       </div>
 
@@ -169,7 +168,7 @@
         <article class="metric-card metric-primary">
           <span>Clicks</span>
           <strong id="metric-clicks">0</strong>
-          <small id="metric-clicks-note">Across all links</small>
+          <small id="metric-clicks-note">Across your managed links</small>
           <svg class="sparkline" id="sparkline" viewBox="0 0 320 96" preserveAspectRatio="none" aria-hidden="true"></svg>
         </article>
         <article class="metric-card">
@@ -198,14 +197,14 @@
             <span aria-hidden="true">⌕</span>
             <input id="link-search" type="search" placeholder="Search links, labels, destinations…" aria-label="Search links" />
           </div>
-          <div class="library-meta"><span id="link-count">0 links</span><span class="sample-badge" id="sample-badge">Workspace</span></div>
+          <div class="library-meta"><span id="link-count">0 links</span><span class="sample-badge" id="sample-badge">Live workspace</span></div>
         </div>
         <div class="link-table-head" aria-hidden="true"><span>Link</span><span>Destination</span><span>Clicks</span><span>Created</span><span></span></div>
         <div class="link-list" id="link-list"></div>
         <div class="empty-state" id="empty-state" hidden>
           <div class="empty-mark"><span></span><span></span><span></span></div>
-          <h3>No links match that search.</h3>
-          <p>Try a different phrase or create a fresh path above.</p>
+          <h3>No links yet.</h3>
+          <p>Create your first short link above.</p>
         </div>
       </div>
     </section>
@@ -219,13 +218,13 @@
       <div class="principles-grid">
         <article><span>01</span><h3>Fast before fancy</h3><p>The first useful action stays obvious. Advanced controls remain one gesture away, not one screen in the way.</p></article>
         <article><span>02</span><h3>Readable by default</h3><p>Every short link can carry meaning through a deliberate slug, label, and destination preview.</p></article>
-        <article><span>03</span><h3>Measure without spying</h3><p>The production backend records coarse country, device, referrer, and time—never visitor IPs in the app database.</p></article>
-        <article><span>04</span><h3>Edge by design</h3><p>The studio stays static and fast while Cloudflare handles globally shareable redirects, persistence, and click intelligence at the edge.</p></article>
+        <article><span>03</span><h3>Measure without spying</h3><p>NOD records coarse country, device, referrer, and time—not visitor IPs in the analytics database.</p></article>
+        <article><span>04</span><h3>Edge by design</h3><p>The studio, redirects, persistence, and click intelligence are delivered from Cloudflare's edge.</p></article>
       </div>
       <div class="architecture-strip">
-        <div><span>01</span><strong>GitHub Pages</strong><small>Static studio</small></div>
+        <div><span>01</span><strong>Static Assets</strong><small>Studio UI</small></div>
         <i>→</i>
-        <div><span>02</span><strong>Cloudflare Worker</strong><small>Create + redirect</small></div>
+        <div><span>02</span><strong>Cloudflare Worker</strong><small>API + redirects</small></div>
         <i>→</i>
         <div><span>03</span><strong>D1</strong><small>Links + events</small></div>
       </div>
@@ -238,7 +237,7 @@
     <div class="footer-meta"><span>Independent product</span><span>Built by Hans Sai</span><a href="#top">Back to top ↑</a></div>
   </footer>
 
-  <dialog class="details-dialog" id="details-dialog">
+  <dialog class="details-dialog" id="details-dialog" aria-label="Link details">
     <div class="dialog-shell">
       <button class="dialog-close" id="dialog-close" type="button" aria-label="Close details">×</button>
       <div class="dialog-kicker">LINK DETAILS</div>
@@ -246,9 +245,9 @@
     </div>
   </dialog>
 
-  <dialog class="command-dialog" id="command-dialog">
+  <dialog class="command-dialog" id="command-dialog" aria-label="Command palette">
     <div class="command-shell">
-      <div class="command-search"><span>⌕</span><input id="command-input" placeholder="Type a command…" autocomplete="off" /></div>
+      <div class="command-search"><span aria-hidden="true">⌕</span><input id="command-input" placeholder="Type a command…" autocomplete="off" aria-label="Command search" /></div>
       <div class="command-list" id="command-list"></div>
       <div class="command-foot"><span><kbd>↑</kbd><kbd>↓</kbd> navigate</span><span><kbd>↵</kbd> run</span><span><kbd>esc</kbd> close</span></div>
     </div>
