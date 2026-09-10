@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - "worker/**"
+      - "docs/**"
       - ".github/workflows/deploy-cloudflare.yml"
 
 permissions:
@@ -44,9 +45,38 @@ jobs:
         working-directory: worker
         run: npm install --no-audit --no-fund
 
-      - name: Create or reuse NOD Turnstile
+      - name: Assemble production assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat docs/styles-1.part docs/styles-2.part docs/styles-3.part docs/styles-4.part > /tmp/nod-styles.css
+          cat docs/app-1.part docs/app-2.part docs/app-3.part docs/app-4.part docs/app-5.part > /tmp/nod-app.js
+          test -s /tmp/nod-styles.css
+          test -s /tmp/nod-app.js
+          node --check /tmp/nod-app.js
+          node --check docs/product-runtime.js
+          cp /tmp/nod-styles.css docs/styles.css
+          cp /tmp/nod-app.js docs/app.js
+
+      - name: Resolve production Worker URL
+        id: worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          response=$(curl -fsS \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/subdomain")
+          subdomain=$(printf '%s' "$response" | jq -r '.result.subdomain')
+          test -n "$subdomain" && test "$subdomain" != "null"
+          worker_host="nod-edge.${subdomain}.workers.dev"
+          echo "url=https://${worker_host}" >> "$GITHUB_OUTPUT"
+          echo "host=${worker_host}" >> "$GITHUB_OUTPUT"
+
+      - name: Create or update NOD Turnstile
         id: turnstile
         shell: bash
+        env:
+          WORKER_HOST: ${{ steps.worker.outputs.host }}
         run: |
           set -euo pipefail
           API="https://api.cloudflare.com/client/v4"
@@ -57,6 +87,7 @@ jobs:
             "$API/accounts/$CLOUDFLARE_ACCOUNT_ID/challenges/widgets?filter=name:NOD%20Production")
 
           sitekey=$(printf '%s' "$widgets" | jq -r '.result[]? | select(.name == "NOD Production") | .sitekey' | head -n 1)
+          payload=$(jq -nc --arg worker "$WORKER_HOST" '{domains:["spairkie.github.io",$worker],mode:"managed",name:"NOD Production"}')
 
           if [ -z "$sitekey" ] || [ "$sitekey" = "null" ]; then
             widget=$(curl -fsS \
@@ -64,11 +95,19 @@ jobs:
               -H "$AUTH" \
               -H "Content-Type: application/json" \
               "$API/accounts/$CLOUDFLARE_ACCOUNT_ID/challenges/widgets" \
-              --data '{"domains":["spairkie.github.io"],"mode":"managed","name":"NOD Production"}')
+              --data "$payload")
           else
             widget=$(curl -fsS \
               -H "$AUTH" \
               "$API/accounts/$CLOUDFLARE_ACCOUNT_ID/challenges/widgets/$sitekey")
+
+            updated=$(curl -fsS \
+              -X PUT \
+              -H "$AUTH" \
+              -H "Content-Type: application/json" \
+              "$API/accounts/$CLOUDFLARE_ACCOUNT_ID/challenges/widgets/$sitekey" \
+              --data "$payload")
+            test "$(printf '%s' "$updated" | jq -r '.success')" = "true"
           fi
 
           success=$(printf '%s' "$widget" | jq -r '.success')
@@ -82,7 +121,7 @@ jobs:
           test -n "$sitekey" && test "$sitekey" != "null"
           test -n "$turnstile_secret" && test "$turnstile_secret" != "null"
 
-          rate_limit_salt=$(openssl rand -hex 32)
+          rate_limit_salt=$(printf '%s:%s:nod-rate-limit-v1' "$CLOUDFLARE_ACCOUNT_ID" "$turnstile_secret" | sha256sum | awk '{print $1}')
           echo "::add-mask::$turnstile_secret"
           echo "::add-mask::$rate_limit_salt"
 
@@ -94,7 +133,24 @@ jobs:
 
           echo "sitekey=$sitekey" >> "$GITHUB_OUTPUT"
 
-      - name: Deploy Worker and provision D1
+      - name: Prepare production client config
+        shell: bash
+        env:
+          WORKER_URL: ${{ steps.worker.outputs.url }}
+          WORKER_HOST: ${{ steps.worker.outputs.host }}
+          TURNSTILE_SITE_KEY: ${{ steps.turnstile.outputs.sitekey }}
+        run: |
+          set -euo pipefail
+          cat > /tmp/nod-config.js <<EOF
+          window.__NOD_CONFIG__ = {
+            API_BASE_URL: "$WORKER_URL",
+            SHORT_DOMAIN: "$WORKER_HOST",
+            TURNSTILE_SITE_KEY: "$TURNSTILE_SITE_KEY"
+          };
+          EOF
+          cp /tmp/nod-config.js docs/config.js
+
+      - name: Deploy Worker, static studio and D1 binding
         working-directory: worker
         shell: bash
         run: |
@@ -104,20 +160,6 @@ jobs:
       - name: Apply D1 migrations
         working-directory: worker
         run: npx wrangler d1 migrations apply DB --remote
-
-      - name: Resolve production Worker URL
-        id: worker
-        shell: bash
-        run: |
-          set -euo pipefail
-          response=$(curl -fsS \
-            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/subdomain")
-          subdomain=$(printf '%s' "$response" | jq -r '.result.subdomain')
-          test -n "$subdomain" && test "$subdomain" != "null"
-          worker_url="https://nod-edge.${subdomain}.workers.dev"
-          echo "url=$worker_url" >> "$GITHUB_OUTPUT"
-          echo "host=nod-edge.${subdomain}.workers.dev" >> "$GITHUB_OUTPUT"
 
       - name: Verify Worker health
         shell: bash
@@ -135,32 +177,22 @@ jobs:
           echo "Worker health check failed"
           exit 1
 
-      - name: Assemble stable Pages assets
-        shell: bash
-        run: |
-          set -euo pipefail
-          cat docs/styles-1.part docs/styles-2.part docs/styles-3.part docs/styles-4.part > /tmp/nod-styles.css
-          cat docs/app-1.part docs/app-2.part docs/app-3.part docs/app-4.part docs/app-5.part > /tmp/nod-app.js
-          test -s /tmp/nod-styles.css
-          test -s /tmp/nod-app.js
-          node --check /tmp/nod-app.js
-
-      - name: Connect GitHub Pages to production
+      - name: Verify production studio
         shell: bash
         env:
           WORKER_URL: ${{ steps.worker.outputs.url }}
-          WORKER_HOST: ${{ steps.worker.outputs.host }}
-          TURNSTILE_SITE_KEY: ${{ steps.turnstile.outputs.sitekey }}
         run: |
           set -euo pipefail
-          cat > /tmp/nod-config.js <<EOF
-          window.__NOD_CONFIG__ = {
-            API_BASE_URL: "$WORKER_URL",
-            SHORT_DOMAIN: "$WORKER_HOST",
-            TURNSTILE_SITE_KEY: "$TURNSTILE_SITE_KEY"
-          };
-          EOF
+          page=$(curl -fsS "$WORKER_URL/")
+          printf '%s' "$page" | grep -q 'id="hero-title"'
+          curl -fsS "$WORKER_URL/ui-polish.css" >/dev/null
+          curl -fsS "$WORKER_URL/product-runtime.js" >/dev/null
+          echo "NOD studio is live at $WORKER_URL/"
 
+      - name: Keep GitHub Pages mirror current
+        shell: bash
+        run: |
+          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
@@ -173,17 +205,17 @@ jobs:
             git add docs/config.js docs/styles.css docs/app.js
 
             if git diff --cached --quiet; then
-              echo "GitHub Pages assets and production config are already current."
+              echo "GitHub Pages mirror is already current."
               exit 0
             fi
 
-            git commit -m "Build stable NOD Pages assets"
+            git commit -m "Build stable NOD production assets"
             if git push origin HEAD:main; then
               exit 0
             fi
           done
 
-          echo "Could not update production Pages assets after three attempts."
+          echo "Could not update production Pages mirror after three attempts."
           exit 1
 
       - name: Remove temporary secret file
@@ -199,9 +231,10 @@ jobs:
           {
             echo "## NOD production is live"
             echo
-            echo "- App: https://spairkie.github.io/NOD/"
-            echo "- Edge API: $WORKER_URL"
-            echo "- Turnstile: enabled"
+            echo "- Canonical app + short links: $WORKER_URL/"
+            echo "- API: $WORKER_URL/api"
+            echo "- GitHub Pages mirror: https://spairkie.github.io/NOD/"
+            echo "- Turnstile: enabled for both production hosts"
             echo "- D1: provisioned and migrated"
-            echo "- Pages assets: stable CSS + JS bundles"
+            echo "- Static assets: deployed on Cloudflare edge"
           } >> "$GITHUB_STEP_SUMMARY"
