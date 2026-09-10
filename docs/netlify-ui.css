@@ -1,0 +1,43 @@
+html.modal-lock,
+body.modal-lock {
+  overflow: hidden !important;
+  overscroll-behavior: none;
+}
+
+.dashboard-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+#restore-links {
+  white-space: nowrap;
+}
+
+.details-dialog[open],
+.command-dialog[open] {
+  position: fixed;
+  inset: 0;
+}
+
+.details-dialog[open]::backdrop,
+.command-dialog[open]::backdrop {
+  pointer-events: auto;
+}
+
+.details-dialog .dialog-shell,
+.command-dialog .command-shell {
+  overscroll-behavior: contain;
+}
+
+@media (max-width: 700px) {
+  .dashboard-controls {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .dashboard-controls .quiet-btn {
+    flex: 1 1 160px;
+  }
+}
