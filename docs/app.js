@@ -1,12 +1,12 @@
 (() => {
   'use strict';
 
-  const CONFIG = window.__NOD_CONFIG__ || {};
-  const API_BASE = String(CONFIG.API_BASE_URL || '').replace(/\/$/, '');
-  const SHORT_DOMAIN = String(CONFIG.SHORT_DOMAIN || location.host).replace(/^https?:\/\//, '').replace(/\/$/, '');
-  const STORAGE_KEY = 'nod.links.v1';
+  const API_BASE = location.origin;
+  const SHORT_DOMAIN = location.host;
+  const STORAGE_KEY = 'nod.links.v2';
+  const LEGACY_STORAGE_KEY = 'nod.links.v1';
   const THEME_KEY = 'nod.theme.v1';
-  const RESERVED = new Set(['api','admin','app','assets','login','logout','signup','pricing','about','terms','privacy','help','support','studio','links','r']);
+  const RESERVED = new Set(['api','admin','app','assets','login','logout','signup','pricing','about','terms','privacy','help','support','studio','links','r','.netlify']);
 
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -17,28 +17,46 @@
     query: '',
     selectedId: null,
     commands: [],
-    commandIndex: 0
+    commandIndex: 0,
+    serviceAvailable: true
   };
 
   async function init() {
     initTheme();
-    initFlowField();
+    migrateLegacyStorage();
+    state.links = loadManagedLinks();
     initInteractions();
-    updateServiceUI();
+    initFlowField();
+    initCommandPalette();
     $('#domain-prefix').textContent = `${SHORT_DOMAIN}/`;
-    initTurnstile();
+    renderAll();
+    await checkService();
     await refreshLinks();
     renderAll();
-    initCommandPalette();
+    rebuildCommandPalette();
+  }
+
+  function migrateLegacyStorage() {
+    if (localStorage.getItem(STORAGE_KEY)) return;
+    try {
+      const legacy = JSON.parse(localStorage.getItem(LEGACY_STORAGE_KEY) || '[]');
+      if (!Array.isArray(legacy)) return;
+      const currentHost = location.host.toLowerCase();
+      const compatible = legacy.filter(item => {
+        if (!item || !item.slug || !item.manageKey) return false;
+        try {
+          if (item.shortUrl) return new URL(item.shortUrl).host.toLowerCase() === currentHost;
+        } catch {}
+        return false;
+      });
+      if (compatible.length) localStorage.setItem(STORAGE_KEY, JSON.stringify(compatible));
+    } catch {}
   }
 
   function loadManagedLinks() {
     try {
       const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
-      if (!Array.isArray(stored)) return [];
-      const real = stored.filter(link => link && !link.sample && !String(link.id || '').startsWith('sample-'));
-      if (real.length !== stored.length) localStorage.setItem(STORAGE_KEY, JSON.stringify(real));
-      return real;
+      return Array.isArray(stored) ? stored.filter(link => link && link.slug && link.manageKey) : [];
     } catch {
       return [];
     }
@@ -48,77 +66,58 @@
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state.links));
   }
 
-  function updateServiceUI() {
-    const live = Boolean(API_BASE);
+  async function checkService() {
     const chip = $('#mode-chip');
+    const label = $('#mode-label');
     const dot = $('.mode-dot');
-    if (chip) chip.title = live ? 'Connected to NOD production on Cloudflare.' : 'The production edge service is unavailable.';
-    if (dot) dot.style.background = live ? 'var(--green)' : 'var(--accent)';
-    $('#mode-label').textContent = live ? 'Live · Cloudflare' : 'Service unavailable';
-    $('#sample-badge').textContent = live ? 'Live workspace' : 'Offline';
-    $('#reset-demo')?.remove();
-
-    const exportButton = $('#export-links');
-    if (exportButton) {
-      exportButton.textContent = 'Back up access keys';
-      exportButton.title = 'Save the private management keys needed to manage these links from another browser.';
-    }
-
-    if (!live) {
+    try {
+      const response = await fetch(`${API_BASE}/api/health`, { headers: { Accept: 'application/json' }, cache: 'no-store' });
+      if (!response.ok) throw new Error('health');
+      state.serviceAvailable = true;
+      label.textContent = 'Live · Netlify';
+      chip.title = 'Connected to NOD production on Netlify.';
+      if (dot) dot.style.background = 'var(--green)';
+      $('#shorten-button').disabled = false;
+    } catch {
+      state.serviceAvailable = false;
+      label.textContent = 'Service unavailable';
+      chip.title = 'NOD could not reach its Netlify backend.';
+      if (dot) dot.style.background = 'var(--accent)';
       $('#shorten-button').disabled = true;
       const status = $('#url-status');
       status.className = 'invalid';
-      status.textContent = 'Production service unavailable';
+      status.textContent = 'Backend unavailable';
     }
   }
 
   async function refreshLinks() {
-    state.links = loadManagedLinks();
-    if (!API_BASE) return;
-
-    const managed = state.links.filter(link => link.manageKey).slice(0, 50);
-    await Promise.allSettled(managed.map(async link => {
+    if (!state.links.length) return;
+    await Promise.allSettled(state.links.slice(0, 75).map(async link => {
       try {
         const response = await fetch(`${API_BASE}/api/links/${encodeURIComponent(link.slug)}/stats`, {
-          headers: { 'X-NOD-Key': link.manageKey, Accept: 'application/json' }
+          headers: { 'X-NOD-Key': link.manageKey, Accept: 'application/json' },
+          cache: 'no-store'
         });
-        if (!response.ok) return;
+        if (!response.ok) {
+          if (response.status === 404) link.unavailable = true;
+          return;
+        }
         const data = await response.json();
         link.clicks = Number(data.clicks || 0);
         link.events = Array.isArray(data.events) ? data.events : [];
+        link.unavailable = false;
       } catch {}
     }));
     saveManagedLinks();
   }
 
-  function initTurnstile() {
-    const siteKey = String(CONFIG.TURNSTILE_SITE_KEY || '').trim();
-    if (!API_BASE || !siteKey) return;
-
-    $('#turnstile-wrap').hidden = false;
-    window.__nodTurnstileToken = '';
-    window.__nodRenderTurnstile = () => {
-      if (!window.turnstile || window.__nodTurnstileWidgetId !== undefined) return;
-      window.__nodTurnstileWidgetId = window.turnstile.render('#turnstile-widget', {
-        sitekey: siteKey,
-        theme: document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light',
-        callback: token => { window.__nodTurnstileToken = token; },
-        'expired-callback': () => { window.__nodTurnstileToken = ''; },
-        'error-callback': () => { window.__nodTurnstileToken = ''; }
-      });
-    };
-
-    const script = document.createElement('script');
-    script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?onload=__nodRenderTurnstile&render=explicit';
-    script.async = true;
-    script.defer = true;
-    document.head.appendChild(script);
-  }
-
   function initTheme() {
-    const saved = localStorage.getItem(THEME_KEY);
-    const prefersDark = matchMedia('(prefers-color-scheme: dark)').matches;
-    document.documentElement.dataset.theme = saved || (prefersDark ? 'dark' : 'light');
+    let next = 'light';
+    try {
+      const saved = localStorage.getItem(THEME_KEY);
+      next = saved || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    } catch {}
+    document.documentElement.dataset.theme = next;
     updateThemeColor();
   }
 
@@ -132,42 +131,33 @@
     document.documentElement.dataset.theme = next;
     localStorage.setItem(THEME_KEY, next);
     updateThemeColor();
-    rerenderTurnstile();
     toast(`${titleCase(next)} theme`);
   }
 
-  function rerenderTurnstile() {
-    if (!window.turnstile || window.__nodTurnstileWidgetId === undefined) return;
-    try {
-      window.turnstile.remove(window.__nodTurnstileWidgetId);
-      delete window.__nodTurnstileWidgetId;
-      window.__nodTurnstileToken = '';
-      window.__nodRenderTurnstile?.();
-    } catch {}
-  }
-
   function initInteractions() {
-    $('#theme-toggle').addEventListener('click', toggleTheme);
-    $('#shortcut-button').addEventListener('click', openCommandPalette);
-    $('#advanced-toggle').addEventListener('click', toggleAdvanced);
-    $('#utm-toggle').addEventListener('change', event => { $('#utm-field').hidden = !event.target.checked; });
-    $('#shorten-form').addEventListener('submit', onSubmit);
-    $('#long-url').addEventListener('input', updateUrlStatus);
-    $('#custom-slug').addEventListener('input', sanitizeSlugInput);
-    $('#copy-result').addEventListener('click', () => copyText($('#result-link').href, 'Short link copied'));
-    $('#result-card').addEventListener('click', onResultAction);
-    $('#link-search').addEventListener('input', event => {
+    $('#theme-toggle')?.addEventListener('click', toggleTheme);
+    $('#shortcut-button')?.addEventListener('click', openCommandPalette);
+    $('#advanced-toggle')?.addEventListener('click', toggleAdvanced);
+    $('#utm-toggle')?.addEventListener('change', event => { $('#utm-field').hidden = !event.target.checked; });
+    $('#shorten-form')?.addEventListener('submit', onSubmit);
+    $('#long-url')?.addEventListener('input', updateUrlStatus);
+    $('#custom-slug')?.addEventListener('input', sanitizeSlugInput);
+    $('#copy-result')?.addEventListener('click', () => copyText($('#result-link').href, 'Short link copied'));
+    $('#result-card')?.addEventListener('click', onResultAction);
+    $('#link-search')?.addEventListener('input', event => {
       state.query = event.target.value.toLowerCase().trim();
       renderLinkList();
     });
-    $('#link-list').addEventListener('click', onLinkListClick);
-    $('#dialog-close').addEventListener('click', () => $('#details-dialog').close());
-    $('#details-dialog').addEventListener('click', event => {
-      if (event.target === $('#details-dialog')) $('#details-dialog').close();
-    });
-    $('#details-dialog').addEventListener('close', syncDialogState);
-    $('#command-dialog').addEventListener('close', syncDialogState);
-    $('#export-links').addEventListener('click', exportLinks);
+    $('#link-list')?.addEventListener('click', onLinkListClick);
+    $('#dialog-close')?.addEventListener('click', () => $('#details-dialog').close());
+    $('#details-dialog')?.addEventListener('close', syncModalState);
+    $('#details-dialog')?.addEventListener('cancel', syncModalState);
+    $('#command-dialog')?.addEventListener('close', syncModalState);
+    $('#command-dialog')?.addEventListener('cancel', syncModalState);
+    $('#export-links')?.addEventListener('click', exportLinks);
+    $('#restore-links')?.addEventListener('click', () => $('#restore-links-file').click());
+    $('#restore-links-file')?.addEventListener('change', restoreLinks);
+    $('#back-to-top')?.addEventListener('click', backToTop);
 
     document.addEventListener('keydown', event => {
       const mod = event.metaKey || event.ctrlKey;
@@ -175,14 +165,14 @@
         event.preventDefault();
         openCommandPalette();
       }
-      if (mod && event.key === 'Enter' && !$('#command-dialog').open) {
+      if (mod && event.key === 'Enter' && !$('#command-dialog')?.open && !$('#details-dialog')?.open) {
         event.preventDefault();
-        $('#shorten-form').requestSubmit();
+        $('#shorten-form')?.requestSubmit();
       }
-      if (event.key === '/' && !['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName)) {
+      if (event.key === '/' && !['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName) && !activeDialog()) {
         event.preventDefault();
-        $('#link-search').focus();
         location.hash = '#links';
+        setTimeout(() => $('#link-search')?.focus(), 80);
       }
     });
 
@@ -198,12 +188,27 @@
     });
   }
 
+  function activeDialog() {
+    return $$('#details-dialog, #command-dialog').find(dialog => dialog.open) || null;
+  }
+
+  function syncModalState() {
+    const dialog = activeDialog();
+    document.documentElement.classList.toggle('modal-lock', Boolean(dialog));
+    document.body.classList.toggle('modal-lock', Boolean(dialog));
+    const stack = $('#toast-stack');
+    if (!stack) return;
+    const target = dialog?.querySelector('.dialog-shell, .command-shell') || document.body;
+    if (stack.parentElement !== target) target.appendChild(stack);
+  }
+
   function toggleAdvanced() {
     const button = $('#advanced-toggle');
     const panel = $('#advanced-panel');
     const expanded = button.getAttribute('aria-expanded') === 'true';
     button.setAttribute('aria-expanded', String(!expanded));
     panel.hidden = expanded;
+    $('#advanced-symbol').textContent = expanded ? '+' : '−';
   }
 
   function sanitizeSlugInput(event) {
@@ -226,7 +231,7 @@
   }
 
   function updateUrlStatus() {
-    if (!API_BASE) return;
+    if (!state.serviceAvailable) return;
     const status = $('#url-status');
     const value = $('#long-url').value.trim();
     if (!value) {
@@ -246,8 +251,8 @@
 
   async function onSubmit(event) {
     event.preventDefault();
-    if (!API_BASE) {
-      toast('NOD production is unavailable right now', 'error');
+    if (!state.serviceAvailable) {
+      toast('NOD is unavailable right now', 'error');
       return;
     }
 
@@ -273,16 +278,22 @@
       }
 
       const slug = $('#custom-slug').value.trim();
-      if (slug && RESERVED.has(slug)) throw new Error('That ending is reserved. Try another.');
-      if (slug && state.links.some(link => link.slug === slug)) throw new Error('That ending is already in this workspace.');
+      if (slug && RESERVED.has(slug.toLowerCase())) throw new Error('That ending is reserved. Try another.');
 
-      const created = await createRemoteLink({
-        url: destination,
-        slug: slug || undefined,
-        title: $('#link-title').value.trim() || undefined,
-        expiresAt: expiryToIso($('#expiry').value)
+      const response = await fetch(`${API_BASE}/api/links`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({
+          url: destination,
+          slug: slug || undefined,
+          title: $('#link-title').value.trim() || undefined,
+          expiresAt: expiryToIso($('#expiry').value)
+        })
       });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || `Could not create link (${response.status})`);
 
+      const created = normalizeLink(data.link || data);
       state.links = [created, ...state.links.filter(link => link.slug !== created.slug)];
       saveManagedLinks();
       showResult(created);
@@ -292,7 +303,7 @@
     } catch (error) {
       toast(error?.message || 'Could not create link', 'error');
     } finally {
-      button.disabled = false;
+      button.disabled = !state.serviceAvailable;
       button.querySelector('span').textContent = 'Shorten';
     }
   }
@@ -300,29 +311,6 @@
   function expiryToIso(value) {
     const ms = { '1d': 864e5, '7d': 7 * 864e5, '30d': 30 * 864e5 }[value];
     return ms ? new Date(Date.now() + ms).toISOString() : null;
-  }
-
-  async function createRemoteLink(payload) {
-    const headers = { 'Content-Type': 'application/json', Accept: 'application/json' };
-    if (CONFIG.TURNSTILE_SITE_KEY) {
-      const token = window.__nodTurnstileToken || '';
-      if (!token) throw new Error('Complete the human verification before creating a link.');
-      headers['X-Turnstile-Token'] = token;
-    }
-
-    const response = await fetch(`${API_BASE}/api/links`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(payload)
-    });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(data.error || `Could not create link (${response.status})`);
-
-    if (window.turnstile && window.__nodTurnstileWidgetId !== undefined) {
-      window.turnstile.reset(window.__nodTurnstileWidgetId);
-      window.__nodTurnstileToken = '';
-    }
-    return normalizeLink(data.link || data);
   }
 
   function normalizeLink(link) {
@@ -335,8 +323,9 @@
       expiresAt: link.expiresAt || link.expires_at || null,
       clicks: Number(link.clicks || 0),
       events: Array.isArray(link.events) ? link.events : [],
-      shortUrl: link.shortUrl || `https://${SHORT_DOMAIN}/${link.slug}`,
-      manageKey: link.manageKey || link.manage_key || ''
+      shortUrl: link.shortUrl || shortUrlFor(link.slug),
+      manageKey: link.manageKey || link.manage_key || '',
+      unavailable: false
     };
   }
 
@@ -361,7 +350,7 @@
   }
 
   function shortUrlFor(slug) {
-    return `https://${SHORT_DOMAIN}/${encodeURIComponent(slug)}`;
+    return `${location.origin}/${encodeURIComponent(slug)}`;
   }
 
   function onResultAction(event) {
@@ -369,15 +358,21 @@
     if (!action) return;
     const link = state.links.find(item => item.id === $('#result-card').dataset.linkId);
     if (action === 'details' && link) openDetails(link);
-    if (action === 'new') {
-      $('#long-url').value = '';
-      $('#custom-slug').value = '';
-      $('#link-title').value = '';
-      $('#result-card').hidden = true;
-      updateUrlStatus();
-      $('#long-url').focus();
-      $('#studio').scrollIntoView({ behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
-    }
+    if (action === 'new') resetComposer();
+  }
+
+  function resetComposer() {
+    $('#long-url').value = '';
+    $('#custom-slug').value = '';
+    $('#link-title').value = '';
+    $('#utm-source').value = '';
+    $('#utm-toggle').checked = false;
+    $('#utm-field').hidden = true;
+    $('#expiry').value = 'never';
+    $('#result-card').hidden = true;
+    updateUrlStatus();
+    $('#long-url').focus();
+    $('#studio').scrollIntoView({ behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
   }
 
   function renderAll() {
@@ -394,7 +389,6 @@
     const links = visibleLinks();
     const list = $('#link-list');
     $('#link-count').textContent = `${state.links.length} ${state.links.length === 1 ? 'link' : 'links'}`;
-    $('#sample-badge').textContent = API_BASE ? 'Live workspace' : 'Offline';
     $('#empty-state').hidden = links.length > 0;
 
     const emptyTitle = $('#empty-state h3');
@@ -411,9 +405,11 @@
 
     list.innerHTML = links.map(link => {
       const expired = link.expiresAt && new Date(link.expiresAt) <= new Date();
+      const bad = expired || link.unavailable;
+      const statusLabel = link.unavailable ? 'Unavailable' : expired ? 'Expired' : 'Active';
       return `<article class="link-row" data-id="${escapeAttr(link.id)}">
         <div class="link-primary">
-          <div class="link-slug"><span class="status" style="${expired ? 'background:var(--accent)' : ''}"></span>${escapeHtml(SHORT_DOMAIN)}/${escapeHtml(link.slug)}</div>
+          <div class="link-slug"><span class="status" title="${statusLabel}" style="${bad ? 'background:var(--accent)' : ''}"></span>${escapeHtml(SHORT_DOMAIN)}/${escapeHtml(link.slug)}</div>
           <div class="link-title">${escapeHtml(link.title || safeHost(link.url))}</div>
         </div>
         <div class="link-destination" title="${escapeAttr(link.url)}">${escapeHtml(link.url)}</div>
@@ -425,12 +421,11 @@
   }
 
   function renderMetrics() {
-    const links = state.links;
+    const links = state.links.filter(link => !link.unavailable);
     const totalClicks = links.reduce((sum, link) => sum + Number(link.clicks || 0), 0);
     const active = links.filter(link => !link.expiresAt || new Date(link.expiresAt) > new Date()).length;
     $('#metric-clicks').textContent = formatNumber(totalClicks);
     $('#metric-links').textContent = formatNumber(active);
-    $('#metric-clicks-note').textContent = 'Across your managed links';
     $('#active-track').style.width = `${links.length ? Math.round(active / links.length * 100) : 0}%`;
 
     const events = links.flatMap(link => link.events || []);
@@ -457,19 +452,17 @@
   }
 
   function renderSparkline(events) {
-    const days = 14;
-    const buckets = Array(days).fill(0);
+    const buckets = Array(14).fill(0);
     events.forEach(event => {
       const age = Math.floor((Date.now() - new Date(event.at).getTime()) / 864e5);
-      if (age >= 0 && age < days) buckets[days - 1 - age]++;
+      if (age >= 0 && age < 14) buckets[13 - age]++;
     });
     const max = Math.max(...buckets, 1);
     const width = 320;
     const height = 96;
-    const points = buckets.map((value, index) => [index / (days - 1) * width, height - (value / max) * (height - 18) - 4]);
+    const points = buckets.map((value, index) => [index / 13 * width, height - (value / max) * (height - 18) - 4]);
     const line = smoothPath(points);
-    const area = `${line} L ${width} ${height} L 0 ${height} Z`;
-    $('#sparkline').innerHTML = `<path class="area" d="${area}"/><path class="line" d="${line}"/>`;
+    $('#sparkline').innerHTML = `<path class="area" d="${line} L ${width} ${height} L 0 ${height} Z"/><path class="line" d="${line}"/>`;
   }
 
   function smoothPath(points) {
@@ -486,9 +479,9 @@
 
   function onLinkListClick(event) {
     const row = event.target.closest('.link-row');
-    if (!row) return;
+    if (!row || !event.target.closest('[data-action="details"]')) return;
     const link = state.links.find(item => item.id === row.dataset.id);
-    if (link && event.target.closest('[data-action="details"]')) openDetails(link);
+    if (link) openDetails(link);
   }
 
   function openDetails(link) {
@@ -516,48 +509,71 @@
     const dialog = $('#details-dialog');
     dialog.setAttribute('aria-labelledby', titleId);
     dialog.showModal();
-    syncDialogState();
+    syncModalState();
   }
 
   async function handleDetailAction(event, link) {
-    const action = event.target?.dataset?.detail;
+    const button = event.target.closest('[data-detail]');
+    const action = button?.dataset?.detail;
     if (!action) return;
     if (action === 'copy') await copyText(link.shortUrl || shortUrlFor(link.slug), 'Short link copied');
     if (action === 'open') window.open(link.url, '_blank', 'noopener');
-    if (action === 'delete') await deleteLink(link);
+    if (action === 'delete') await deleteLink(link, button);
   }
 
-  async function deleteLink(link) {
-    if (!API_BASE) {
-      toast('NOD production is unavailable right now', 'error');
-      return;
-    }
+  async function deleteLink(link, button) {
     if (!link.manageKey) {
       toast('This browser does not have the access key for that link', 'error');
       return;
     }
 
-    const response = await fetch(`${API_BASE}/api/links/${encodeURIComponent(link.slug)}`, {
-      method: 'DELETE',
-      headers: { 'X-NOD-Key': link.manageKey }
-    });
-    if (!response.ok) {
-      toast('Could not delete link', 'error');
-      return;
-    }
+    const original = button.textContent;
+    button.disabled = true;
+    button.textContent = 'Deleting…';
 
-    state.links = state.links.filter(item => item.id !== link.id);
-    saveManagedLinks();
-    $('#details-dialog').close();
-    renderAll();
-    rebuildCommandPalette();
-    toast('Link deleted');
+    try {
+      const response = await fetch(`${API_BASE}/api/links/${encodeURIComponent(link.slug)}`, {
+        method: 'DELETE',
+        headers: { 'X-NOD-Key': link.manageKey, Accept: 'application/json' }
+      });
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          state.links = state.links.filter(item => item.id !== link.id);
+          saveManagedLinks();
+          $('#details-dialog').close();
+          renderAll();
+          rebuildCommandPalette();
+          toast('Removed stale link from this workspace');
+          return;
+        }
+        throw new Error(data.error || `Could not delete link (${response.status})`);
+      }
+
+      state.links = state.links.filter(item => item.id !== link.id);
+      saveManagedLinks();
+      $('#details-dialog').close();
+      renderAll();
+      rebuildCommandPalette();
+      toast('Link deleted');
+    } catch (error) {
+      toast(error?.message || 'Could not delete link', 'error');
+    } finally {
+      button.disabled = false;
+      button.textContent = original;
+    }
   }
 
   function exportLinks() {
+    if (!state.links.length) {
+      toast('There are no access keys to back up yet');
+      return;
+    }
     const backup = {
       product: 'NOD',
-      version: 1,
+      version: 2,
+      origin: location.origin,
       exportedAt: nowIso(),
       links: state.links.map(link => ({ ...link }))
     };
@@ -572,21 +588,74 @@
     toast('Access-key backup saved');
   }
 
+  async function restoreLinks(event) {
+    const input = event.target;
+    const file = input.files?.[0];
+    if (!file) return;
+    const button = $('#restore-links');
+    const original = button.textContent;
+    button.disabled = true;
+    button.textContent = 'Checking backup…';
+
+    try {
+      const parsed = JSON.parse(await file.text());
+      const candidates = Array.isArray(parsed) ? parsed : Array.isArray(parsed?.links) ? parsed.links : [];
+      const usable = candidates.filter(item => item && typeof item.slug === 'string' && typeof item.url === 'string' && typeof item.manageKey === 'string' && item.manageKey);
+      if (!usable.length) throw new Error('This file does not contain usable NOD access keys.');
+
+      const checks = await Promise.all(usable.map(async item => {
+        try {
+          const response = await fetch(`${API_BASE}/api/links/${encodeURIComponent(item.slug)}/stats`, {
+            headers: { 'X-NOD-Key': item.manageKey, Accept: 'application/json' },
+            cache: 'no-store'
+          });
+          return response.ok;
+        } catch {
+          return false;
+        }
+      }));
+
+      const restored = usable.filter((_, index) => checks[index]).map(normalizeLink);
+      if (!restored.length) throw new Error('These keys do not match links in this NOD workspace.');
+
+      const merged = new Map(state.links.map(item => [item.slug, item]));
+      for (const item of restored) merged.set(item.slug, item);
+      state.links = [...merged.values()];
+      saveManagedLinks();
+      await refreshLinks();
+      renderAll();
+      rebuildCommandPalette();
+      toast(`${restored.length} ${restored.length === 1 ? 'link' : 'links'} restored`);
+    } catch (error) {
+      toast(error?.message || 'Could not restore that backup', 'error');
+    } finally {
+      input.value = '';
+      button.disabled = false;
+      button.textContent = original;
+    }
+  }
+
+  function backToTop(event) {
+    event.preventDefault();
+    history.replaceState(null, '', location.pathname + location.search);
+    window.scrollTo({ top: 0, left: 0, behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
+  }
+
   function initCommandPalette() {
     rebuildCommandPalette();
-    $('#command-input').addEventListener('input', event => {
+    $('#command-input')?.addEventListener('input', event => {
       state.commandIndex = 0;
       renderCommands(event.target.value);
     });
-    $('#command-list').addEventListener('click', event => {
+    $('#command-list')?.addEventListener('click', event => {
       const item = event.target.closest('.command-item');
       if (item) runCommand(Number(item.dataset.index));
     });
-    $('#command-dialog').addEventListener('close', () => {
+    $('#command-dialog')?.addEventListener('close', () => {
       $('#command-input').value = '';
       renderCommands('');
     });
-    $('#command-dialog').addEventListener('keydown', event => {
+    $('#command-dialog')?.addEventListener('keydown', event => {
       const items = $$('.command-item', $('#command-list'));
       if (event.key === 'ArrowDown') {
         event.preventDefault();
@@ -608,10 +677,11 @@
 
   function rebuildCommandPalette() {
     state.commands = [
-      { name: 'Create a short link', hint: 'Studio', run: () => { location.hash = '#studio'; setTimeout(() => $('#long-url').focus(), 180); } },
-      { name: 'Search your links', hint: '/', run: () => { location.hash = '#links'; setTimeout(() => $('#link-search').focus(), 180); } },
+      { name: 'Create a short link', hint: 'Studio', run: () => { location.hash = '#studio'; setTimeout(() => $('#long-url')?.focus(), 180); } },
+      { name: 'Search your links', hint: '/', run: () => { location.hash = '#links'; setTimeout(() => $('#link-search')?.focus(), 180); } },
       { name: 'Toggle appearance', hint: 'Theme', run: toggleTheme },
       { name: 'Back up access keys', hint: 'JSON', run: exportLinks },
+      { name: 'Restore access keys', hint: 'JSON', run: () => $('#restore-links-file')?.click() },
       { name: 'View principles', hint: 'About', run: () => { location.hash = '#principles'; } },
       ...state.links.slice(0, 5).map(link => ({
         name: `${SHORT_DOMAIN}/${link.slug}`,
@@ -619,14 +689,14 @@
         run: () => openDetails(link)
       }))
     ];
-    if ($('#command-list')) renderCommands($('#command-input')?.value || '');
+    renderCommands($('#command-input')?.value || '');
   }
 
   function openCommandPalette() {
     const dialog = $('#command-dialog');
     if (!dialog.open) dialog.showModal();
-    syncDialogState();
-    setTimeout(() => $('#command-input').focus(), 30);
+    syncModalState();
+    setTimeout(() => $('#command-input')?.focus(), 30);
   }
 
   function renderCommands(query) {
@@ -653,13 +723,9 @@
     command.run();
   }
 
-  function syncDialogState() {
-    document.body.classList.toggle('dialog-open', $$('.details-dialog, .command-dialog').some(dialog => dialog.open));
-  }
-
   function initFlowField() {
     const canvas = $('#flow-field');
-    const context = canvas.getContext('2d');
+    const context = canvas?.getContext('2d');
     if (!context || prefersReducedMotion()) return;
 
     let width = 0;
@@ -698,7 +764,6 @@
       context.lineWidth = .65;
       context.globalAlpha = dark ? .34 : .27;
       context.strokeStyle = dark ? '#d8d4c8' : '#6b685f';
-
       for (const particle of particles) {
         particle.px = particle.x;
         particle.py = particle.y;
@@ -754,10 +819,12 @@
   }
 
   function formatShortDate(iso) {
+    if (!iso) return '—';
     return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(new Date(iso));
   }
 
   function formatRelative(iso) {
+    if (!iso) return '—';
     const diff = Date.now() - new Date(iso).getTime();
     const days = Math.floor(diff / 864e5);
     if (days <= 0) return 'Today';
@@ -794,15 +861,18 @@
   }
 
   function toast(message, type = '') {
+    const stack = $('#toast-stack');
+    if (!stack) return;
+    syncModalState();
     const element = document.createElement('div');
     element.className = `toast ${type}`;
     element.textContent = message;
-    $('#toast-stack').append(element);
+    stack.append(element);
     setTimeout(() => {
       element.style.opacity = '0';
       element.style.transform = 'translateY(5px)';
       setTimeout(() => element.remove(), 220);
-    }, 2600);
+    }, 3000);
   }
 
   init();
