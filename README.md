@@ -2,148 +2,87 @@
 
 **Short links. Long memory.**
 
-![NOD hero preview](./assets/nod-preview.svg)
+NOD is a production URL shortener designed to run entirely on Netlify's Free plan.
 
-![NOD analytics preview](./assets/nod-dashboard.svg)
-
-NOD is a production URL shortener and link-intelligence product built on Cloudflare Workers, D1, Turnstile, and static assets. The same Cloudflare deployment serves the studio, API, analytics management surface, and globally shareable redirects.
-
-**Canonical product:** https://nod-edge.saihanswissle.workers.dev/
-
-**GitHub Pages mirror:** https://spairkie.github.io/NOD/
-
-## Product capabilities
-
-- Real globally shareable redirects served from Cloudflare's edge.
-- D1 persistence for links, click events, and rate-limit state.
-- Custom endings, labels, expiration, and UTM source helper.
-- Real click totals, 14-day activity signal, active-link count, device mix, recent activity, and per-link details.
-- Per-link private management keys for statistics and deletion.
-- Cloudflare Turnstile verification on public link creation.
-- Hashed-IP creation rate limiting without persisting raw visitor IPs.
-- Coarse analytics only: timestamp, country, device class, and referrer host.
-- Responsive light/dark UI, command palette, keyboard shortcuts, reduced-motion support, and persistent management state.
-- Automated production deployment through GitHub Actions.
+**Canonical product:** https://n0d.netlify.app/
 
 ## Architecture
 
 ```text
 Browser
   │
-  └── Cloudflare Worker: nod-edge
-        │
-        ├── /                       static NOD studio
-        ├── /<slug>                 server-side redirect
-        ├── /api/*                  create / stats / delete
-        ├── Turnstile               abuse protection
-        ├── rate limiting           hashed client key
-        └── D1
+  └── Netlify
+        ├── /                     static NOD studio
+        ├── /<slug>               server-side 302 redirect
+        ├── /api/*                Netlify Functions
+        └── Netlify Blobs
             ├── links
-            ├── clicks
-            └── rate_limits
-
-GitHub Pages
-  └── read-only deployment mirror of the same studio assets
+            ├── click events
+            └── rate limits
 ```
 
-Cloudflare Workers Static Assets serves NOD's HTML/CSS/JS when the requested asset exists. Requests such as `/api/links` and `/<slug>` do not match static assets, so they fall through to the Worker script for API handling or redirects. This lets one hostname behave like one coherent product.
+The studio and short links share the same hostname, so a created link looks like:
+
+```text
+https://n0d.netlify.app/Ab3xQ7
+```
+
+## Netlify import settings
+
+When importing `Spairkie/NOD` from GitHub:
+
+- **Base directory:** leave blank
+- **Build command:** leave blank
+- **Publish directory:** `docs`
+- **Functions directory:** `netlify/functions`
+- **Environment variables:** none required
+
+The root `netlify.toml` contains the same deployment configuration and routing rules.
+
+## Product capabilities
+
+- Real globally shareable 302 redirects.
+- Persistent links and click events using Netlify Blobs.
+- Custom endings, labels, expiration, and UTM source helper.
+- Click totals, recent activity, device mix, and per-link details.
+- Private per-link management keys for stats and deletion.
+- Per-IP creation rate limiting without storing raw IP addresses.
+- Responsive light/dark interface, keyboard shortcuts, command palette, and private workspace backup.
 
 ## Repository layout
 
 ```text
 /docs
-  index.html                    Product UI
-  config.js                     Public production endpoint config
-  styles.css                    Core UI styles
-  ui-polish.css                 Responsive/product UI refinements
-  styles-loader.js              Theme-safe stylesheet bootstrap
-  app.js                        Production-only application runtime
-  app-loader.js                 Stable application bootstrap
-  .assetsignore                 Cloudflare asset exclusions
-/worker
-  src/index.js                  API, redirects, analytics, rate limiting
-  migrations/0001_init.sql      D1 schema
-  wrangler.jsonc                Production Worker + Static Assets config
-  package.json                  Pinned Wrangler toolchain
-/.github/workflows
-  deploy-cloudflare.yml         Validate + deploy + migrate + verify
-/assets                         README artwork
-CLOUDFLARE_SETUP.md            Cloudflare deployment notes
-RESEARCH.md                    Product / architecture research
-SECURITY.md                    Threat model and safe defaults
+  index.html
+  config.js
+  styles.css
+  ui-polish.css
+  styles-loader.js
+  app.js
+  app-loader.js
+/netlify/functions
+  _shared.js
+  health.js
+  link-create.js
+  link-stats.js
+  link-delete.js
+  redirect.js
+netlify.toml
+package.json
+SECURITY.md
 README.md
-LICENSE
 ```
 
-There is no local demo data path in the production application. Links shown in the workspace are links actually created in D1 and managed by access keys stored by the browser. If the production API configuration is missing, creation is disabled rather than falling back to fake/local shortening.
+## Storage and ownership
 
-## Production deployment
+The live destination mapping is stored on Netlify. Each browser keeps the private management key for the links created from that browser. The key is required to retrieve private analytics or delete the link.
 
-The repository is already connected to Cloudflare through GitHub Actions. Pushing changes under `docs/`, `worker/`, or the deployment workflow triggers the production deployment.
+Use **Back up access keys** before clearing browser data or moving your management workspace to another device.
 
-The workflow:
+## Free-plan behavior
 
-1. validates the production JavaScript and static assets;
-2. resolves the account's `workers.dev` hostname;
-3. creates or updates the Turnstile widget for the production hosts;
-4. writes the public runtime config used by the studio;
-5. deploys the Worker, static assets, and D1 binding with Wrangler;
-6. applies D1 migrations;
-7. verifies the health endpoint and production studio assets; and
-8. keeps the GitHub Pages mirror pointed at the same production API.
+NOD is intentionally compatible with Netlify Free. Netlify's Free plan uses a hard monthly credit limit, so it pauses rather than automatically charging for overage.
 
-Cloudflare credentials remain in GitHub Actions secrets and are never committed to the repository.
+## Cloudflare
 
-## Local development
-
-From `/worker`:
-
-```bash
-npm install
-npm run dev
-```
-
-The browser UI expects a real API endpoint. For local development, point `docs/config.js` at a Wrangler development endpoint rather than enabling a fake data mode.
-
-## Production security model
-
-- Redirect destinations are stored server-side and limited to complete `http` or `https` URLs.
-- Custom slugs use a narrow character set and a reserved-name list.
-- Every link receives a random management secret; only its SHA-256 hash is stored in D1.
-- Statistics and deletion require the matching per-link management secret.
-- Public link creation is protected by Turnstile.
-- Creation is rate-limited per hashed client IP; the raw IP is not stored in NOD's database.
-- Analytics store only timestamp, coarse country, device class, and referrer host.
-- Browser creation is restricted to approved production origins.
-- `ALLOWED_HOSTS` can be configured if destination restrictions are needed.
-- Redirects use HTTP 302 so destinations are not permanently cached by browsers.
-
-Read [SECURITY.md](./SECURITY.md) before relaxing public-creation or destination restrictions.
-
-## Workspace ownership and backups
-
-NOD currently uses accountless, per-link ownership instead of user accounts. D1 stores the live links; the browser stores the private management keys needed to retrieve analytics or delete the links it created.
-
-Use **Back up access keys** before clearing browser data or moving the management workspace to another device. Treat that JSON file as sensitive because those keys authorize management actions.
-
-## Keyboard controls
-
-- `⌘/Ctrl + K` — command palette
-- `⌘/Ctrl + Enter` — create a link
-- `/` — focus link search when not typing in a field
-- `Esc` — close dialogs
-
-## Custom short domain
-
-`nod-edge.saihanswissle.workers.dev` is the current canonical hostname, so both the studio and short links already share one origin:
-
-```text
-https://nod-edge.saihanswissle.workers.dev/
-https://nod-edge.saihanswissle.workers.dev/NaVAwqJ
-```
-
-When a short custom domain is available, attach it to this Worker as a Cloudflare Custom Domain. The D1 data and redirect architecture do not need to move; only the hostname/origin configuration changes.
-
-## Research
-
-See [RESEARCH.md](./RESEARCH.md) for the competitive scan and the product, privacy, security, and architecture decisions behind NOD.
+Cloudflare is no longer part of NOD's active repository architecture. The previous Worker/D1 deployment files and GitHub Actions deployment workflow have been removed. If an old Cloudflare Worker still exists in the Cloudflare dashboard, it is independent of the Netlify deployment and can be deleted there when you no longer need the old URLs.
