@@ -5,11 +5,11 @@ export default async (request, context) => {
   const slug = url.searchParams.get('slug') || context.params?.slug || '';
   const link = await getLink(slug);
 
-  if (!link || !link.active) return htmlStatus('Path not found', 'This NOD link does not exist.', 404);
-  if (link.expiresAt && new Date(link.expiresAt) <= new Date()) return htmlStatus('Path expired', 'This NOD link is no longer active.', 410);
+  if (!link || !link.active) return htmlStatus('Path not found', 'This short link is not available on NOD.', 404, slug);
+  if (link.expiresAt && new Date(link.expiresAt) <= new Date()) return htmlStatus('Path expired', 'This short link has expired.', 410, slug);
 
   const destination = link.destination;
-  if (!destination) return htmlStatus('Path unavailable', 'The destination is no longer valid.', 410);
+  if (!destination) return htmlStatus('Path unavailable', 'The destination for this short link is no longer valid.', 410, slug);
 
   const event = {
     at: new Date().toISOString(),
