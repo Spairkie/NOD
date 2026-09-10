@@ -1,0 +1,48 @@
+html.modal-lock,
+body.modal-lock {
+  overflow: hidden !important;
+  overscroll-behavior: none;
+}
+
+dialog[open] {
+  isolation: isolate;
+}
+
+.dialog-shell,
+.command-shell {
+  position: relative;
+}
+
+.dialog-shell > .toast-stack,
+.command-shell > .toast-stack {
+  position: sticky;
+  z-index: 2147483647;
+  top: 12px;
+  margin-left: auto;
+  width: min(360px, calc(100% - 8px));
+  pointer-events: none;
+}
+
+.dialog-shell > .toast-stack .toast,
+.command-shell > .toast-stack .toast {
+  pointer-events: auto;
+  box-shadow: 0 18px 50px rgba(0,0,0,.28);
+}
+
+.dashboard-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+@media (max-width: 700px) {
+  .dashboard-controls {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .dashboard-controls .quiet-btn {
+    flex: 1 1 150px;
+  }
+}
