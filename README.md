@@ -2,9 +2,24 @@
 
 **Short links. Long memory.**
 
-NOD is a production URL shortener designed to run entirely on Netlify's Free plan.
+![NOD hero preview](./assets/nod-preview.svg)
 
-**Canonical product:** https://n0d.netlify.app/
+![NOD analytics preview](./assets/nod-dashboard.svg)
+
+NOD is a production URL shortener built as a crafted link studio rather than a generic dashboard. The public app, redirect service, analytics API, and persistent storage run together on Netlify.
+
+**Live:** https://n0d.netlify.app/
+
+## What NOD does
+
+- Creates real, globally shareable short URLs such as `https://n0d.netlify.app/Ab3xQ7`.
+- Supports custom endings, labels, expiration, and a minimal UTM helper.
+- Returns server-side `302` redirects for short-link requests.
+- Tracks coarse click signals including time, device class, country, and referrer host.
+- Keeps raw visitor IP addresses out of link analytics.
+- Uses private per-link management keys for analytics and deletion.
+- Supports access-key backup and restore across browsers.
+- Includes search, link details, responsive light/dark themes, keyboard controls, and a command palette.
 
 ## Architecture
 
@@ -12,8 +27,8 @@ NOD is a production URL shortener designed to run entirely on Netlify's Free pla
 Browser
   │
   └── Netlify
-        ├── /                     static NOD studio
-        ├── /<slug>               server-side 302 redirect
+        ├── /                     NOD studio
+        ├── /<slug>               server-side redirect
         ├── /api/*                Netlify Functions
         └── Netlify Blobs
             ├── links
@@ -21,15 +36,11 @@ Browser
             └── rate limits
 ```
 
-The studio and short links share the same hostname, so a created link looks like:
+The UI and short links intentionally share one hostname. There is no separate demo mode or alternate production backend.
 
-```text
-https://n0d.netlify.app/Ab3xQ7
-```
+## Netlify deployment
 
-## Netlify import settings
-
-When importing `Spairkie/NOD` from GitHub:
+Import `Spairkie/NOD` from GitHub and use:
 
 - **Base directory:** leave blank
 - **Build command:** leave blank
@@ -37,26 +48,18 @@ When importing `Spairkie/NOD` from GitHub:
 - **Functions directory:** `netlify/functions`
 - **Environment variables:** none required
 
-The root `netlify.toml` contains the same deployment configuration and routing rules.
-
-## Product capabilities
-
-- Real globally shareable 302 redirects.
-- Persistent links and click events using Netlify Blobs.
-- Custom endings, labels, expiration, and UTM source helper.
-- Click totals, recent activity, device mix, and per-link details.
-- Private per-link management keys for stats and deletion.
-- Per-IP creation rate limiting without storing raw IP addresses.
-- Responsive light/dark interface, keyboard shortcuts, command palette, and private workspace backup.
+The root `netlify.toml` contains the production routing and deployment settings, so normal pushes to `main` can deploy automatically through Netlify's Git integration.
 
 ## Repository layout
 
 ```text
 /docs
   index.html
+  404.html
   config.js
   styles.css
   ui-polish.css
+  ui-runtime.js
   styles-loader.js
   app.js
   app-loader.js
@@ -67,6 +70,9 @@ The root `netlify.toml` contains the same deployment configuration and routing r
   link-stats.js
   link-delete.js
   redirect.js
+/assets
+  nod-preview.svg
+  nod-dashboard.svg
 netlify.toml
 package.json
 SECURITY.md
@@ -75,14 +81,28 @@ README.md
 
 ## Storage and ownership
 
-The live destination mapping is stored on Netlify. Each browser keeps the private management key for the links created from that browser. The key is required to retrieve private analytics or delete the link.
+Short-link destination records live in Netlify Blobs. Each browser stores the private management keys for the links it manages. Those keys authorize private analytics and deletion; only their hashes are stored with the link record.
 
-Use **Back up access keys** before clearing browser data or moving your management workspace to another device.
+Use **Back up access keys** before clearing browser data or switching devices. Use **Restore access keys** on another browser to recover management access for links that still exist in the current Netlify workspace.
 
-## Free-plan behavior
+## Privacy and abuse controls
 
-NOD is intentionally compatible with Netlify Free. Netlify's Free plan uses a hard monthly credit limit, so it pauses rather than automatically charging for overage.
+NOD accepts only complete external `http://` and `https://` destinations, reserves application route names, rate-limits link creation using a one-way hash of the requesting IP, and does not place the raw IP into click analytics. See [SECURITY.md](./SECURITY.md) for the current threat model and remaining production-hardening work.
 
-## Cloudflare
+## Keyboard controls
 
-Cloudflare is no longer part of NOD's active repository architecture. The previous Worker/D1 deployment files and GitHub Actions deployment workflow have been removed. If an old Cloudflare Worker still exists in the Cloudflare dashboard, it is independent of the Netlify deployment and can be deleted there when you no longer need the old URLs.
+- `⌘/Ctrl + K` opens the command palette.
+- `⌘/Ctrl + Enter` creates a link.
+- `/` focuses link search when you are not typing in a field.
+- `Esc` closes an open dialog.
+
+## Development
+
+Install dependencies, then use Netlify's local development environment so Functions and Blobs behave like the production platform:
+
+```bash
+npm install
+npx netlify dev
+```
+
+NOD intentionally stays framework-light: the studio is static HTML, CSS, and JavaScript, while server behavior lives in small Netlify Functions.
