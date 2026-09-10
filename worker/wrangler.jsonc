@@ -2,13 +2,17 @@
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "nod-edge",
   "main": "src/index.js",
-  "compatibility_date": "2026-09-09",
+  "compatibility_date": "2026-09-10",
   "workers_dev": true,
   "observability": {
     "enabled": true
   },
+  "assets": {
+    "directory": "../docs",
+    "binding": "ASSETS"
+  },
   "vars": {
-    "APP_ORIGINS": "https://spairkie.github.io",
+    "APP_ORIGINS": "https://spairkie.github.io,https://nod-edge.saihanswissle.workers.dev",
     "CREATE_LIMIT_PER_HOUR": "20",
     "ALLOWED_HOSTS": ""
   },
