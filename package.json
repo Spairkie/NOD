@@ -1,0 +1,9 @@
+{
+  "name": "nod-link-studio",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "dependencies": {
+    "@netlify/blobs": "11.0.3"
+  }
+}
