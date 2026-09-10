@@ -3,10 +3,10 @@
   app.src = new URL('app.js', document.baseURI).href;
   app.async = false;
   app.onload = () => {
-    const mode = document.querySelector('#mode-label');
-    const chip = document.querySelector('#mode-chip');
-    if (mode) mode.textContent = 'Live · Netlify';
-    if (chip) chip.title = 'Connected to NOD production on Netlify.';
+    const runtime = document.createElement('script');
+    runtime.src = new URL('ui-runtime.js', document.baseURI).href;
+    runtime.async = false;
+    document.body.appendChild(runtime);
   };
   document.body.appendChild(app);
 })();
