@@ -4,15 +4,15 @@ export const RESERVED = new Set(['api','admin','app','assets','login','logout','
 export const SLUG_RE = /^[a-zA-Z0-9_-]{3,40}$/;
 
 export function linksStore() {
-  return getStore('nod-links', { consistency: 'strong' });
+  return getStore({ name: 'nod-links', consistency: 'strong' });
 }
 
 export function eventsStore() {
-  return getStore('nod-clicks', { consistency: 'strong' });
+  return getStore({ name: 'nod-clicks', consistency: 'strong' });
 }
 
 export function limitsStore() {
-  return getStore('nod-rate-limits', { consistency: 'strong' });
+  return getStore({ name: 'nod-rate-limits', consistency: 'strong' });
 }
 
 export function json(body, status = 200, extra = {}) {
