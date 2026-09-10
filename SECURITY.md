@@ -1,57 +1,33 @@
 # Security notes
 
-NOD is a portfolio-oriented, single-owner URL shortener architecture. The repository includes practical safeguards, but operating a public general-purpose shortener creates ongoing abuse, phishing, moderation, privacy, and availability responsibilities.
-
-## Safe public portfolio configuration
-
-For the safest demonstration deployment:
-
-1. Keep the GitHub Pages front end in local portfolio mode **or** connect the Worker.
-2. If connecting the Worker, configure Cloudflare Turnstile.
-3. Set `APP_ORIGINS` to the exact GitHub Pages origin.
-4. Set `ALLOWED_HOSTS` to domains you control, comma separated.
-5. Keep the default creation rate limit or lower it.
-6. Store `RATE_LIMIT_SALT` and `TURNSTILE_SECRET_KEY` as Worker secrets, never in the repo.
-
-Example:
-
-```jsonc
-"vars": {
-  "APP_ORIGINS": "https://yourname.github.io",
-  "CREATE_LIMIT_PER_HOUR": "10",
-  "ALLOWED_HOSTS": "yourportfolio.com,github.com"
-}
-```
-
-`ALLOWED_HOSTS` also allows subdomains of each configured host. Leave it blank only if you intentionally want a general-purpose shortener and are prepared to operate abuse controls.
+NOD is a public URL shortener running on Netlify Functions and Netlify Blobs. Public shorteners can attract phishing, spam, and automated abuse, so the service is intentionally conservative about what it stores and how link management works.
 
 ## Implemented protections
 
-- Only `http:` and `https:` destinations are accepted.
-- User/password components in destination URLs are rejected.
-- Redirects resolve a server-side slug mapping; the redirect endpoint does not accept arbitrary destination parameters.
-- Self-referential redirects into the shortener host are rejected at creation.
+- Only complete `http:` and `https:` destinations are accepted.
+- URLs containing embedded usernames or passwords are rejected.
+- Redirects resolve a server-side slug mapping; destinations are never supplied directly to the redirect endpoint.
+- Self-referential redirects back into the active NOD hostname are rejected.
 - Reserved route names cannot be claimed as slugs.
-- Optional destination-host allowlisting.
-- Optional Cloudflare Turnstile validation for creation.
-- Per-client creation rate limiting using a salted SHA-256 hash of the client IP.
-- Raw visitor IPs are not written to the application analytics tables.
-- Each link gets a random management key; only its SHA-256 hash is stored server-side.
-- Stats and deletion require the matching per-link management key.
-- CORS can be restricted to the portfolio origin.
-- Responses use `X-Content-Type-Options: nosniff` and a conservative referrer policy.
+- Link creation is rate-limited per client using a one-way hash; raw client IP addresses are not stored in NOD's data stores.
+- Every link receives a random management key. Only the SHA-256 hash of that key is stored server-side.
+- Stats and deletion require the matching management key.
+- Click analytics store only timestamp, coarse country, device class, and referrer hostname.
+- Security headers include `X-Content-Type-Options: nosniff` and a conservative referrer policy.
+- Redirects use HTTP 302 so destinations are not permanently cached by browsers.
 
-## Data recorded for redirects
+## Storage
 
-The click event table stores only:
+Netlify Blobs stores three logical data sets:
 
-- timestamp
-- coarse Cloudflare country code
-- device class
-- referrer hostname
+- link records and destination mappings
+- click-event records
+- short-lived rate-limit counters
 
-Review your own legal/privacy obligations before operating analytics publicly.
+The browser stores the private management keys for links created from that browser. Use **Back up access keys** before clearing browser storage or moving to another device.
 
-## Not included
+## Abuse considerations
 
-NOD does not claim to provide a full commercial trust-and-safety program. A large public service would also need abuse reporting, reputation/scanning systems, automated blocking, moderation workflows, user accounts, audit logs, retention controls, monitoring, backups, alerting, and incident response.
+NOD is usable as a real public shortener, but a large-scale service would also need destination reputation checks, abuse reporting, automated blocking, moderation workflows, retention controls, monitoring, backups, incident response, and potentially user accounts.
+
+If abuse becomes material, the next security upgrade should be an additional creation challenge or stricter destination policy rather than weakening the existing rate limit.
