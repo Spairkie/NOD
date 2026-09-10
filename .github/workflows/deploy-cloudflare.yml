@@ -45,18 +45,17 @@ jobs:
         working-directory: worker
         run: npm install --no-audit --no-fund
 
-      - name: Assemble production assets
+      - name: Validate production assets
         shell: bash
         run: |
           set -euo pipefail
-          cat docs/styles-1.part docs/styles-2.part docs/styles-3.part docs/styles-4.part > /tmp/nod-styles.css
-          cat docs/app-1.part docs/app-2.part docs/app-3.part docs/app-4.part docs/app-5.part > /tmp/nod-app.js
-          test -s /tmp/nod-styles.css
-          test -s /tmp/nod-app.js
-          node --check /tmp/nod-app.js
-          node --check docs/product-runtime.js
-          cp /tmp/nod-styles.css docs/styles.css
-          cp /tmp/nod-app.js docs/app.js
+          test -s docs/index.html
+          test -s docs/styles.css
+          test -s docs/ui-polish.css
+          test -s docs/app.js
+          node --check docs/app.js
+          node --check docs/app-loader.js
+          node --check docs/styles-loader.js
 
       - name: Resolve production Worker URL
         id: worker
@@ -85,7 +84,6 @@ jobs:
           widgets=$(curl -fsS \
             -H "$AUTH" \
             "$API/accounts/$CLOUDFLARE_ACCOUNT_ID/challenges/widgets?filter=name:NOD%20Production")
-
           sitekey=$(printf '%s' "$widgets" | jq -r '.result[]? | select(.name == "NOD Production") | .sitekey' | head -n 1)
           payload=$(jq -nc --arg worker "$WORKER_HOST" '{domains:["spairkie.github.io",$worker],mode:"managed",name:"NOD Production"}')
 
@@ -100,7 +98,6 @@ jobs:
             widget=$(curl -fsS \
               -H "$AUTH" \
               "$API/accounts/$CLOUDFLARE_ACCOUNT_ID/challenges/widgets/$sitekey")
-
             updated=$(curl -fsS \
               -X PUT \
               -H "$AUTH" \
@@ -110,12 +107,7 @@ jobs:
             test "$(printf '%s' "$updated" | jq -r '.success')" = "true"
           fi
 
-          success=$(printf '%s' "$widget" | jq -r '.success')
-          if [ "$success" != "true" ]; then
-            printf '%s\n' "$widget" | jq '.errors'
-            exit 1
-          fi
-
+          test "$(printf '%s' "$widget" | jq -r '.success')" = "true"
           sitekey=$(printf '%s' "$widget" | jq -r '.result.sitekey')
           turnstile_secret=$(printf '%s' "$widget" | jq -r '.result.secret')
           test -n "$sitekey" && test "$sitekey" != "null"
@@ -130,7 +122,6 @@ jobs:
           TURNSTILE_SECRET_KEY=$turnstile_secret
           EOF
           chmod 600 worker/.secrets.production
-
           echo "sitekey=$sitekey" >> "$GITHUB_OUTPUT"
 
       - name: Prepare production client config
@@ -150,18 +141,15 @@ jobs:
           EOF
           cp /tmp/nod-config.js docs/config.js
 
-      - name: Deploy Worker, static studio and D1 binding
+      - name: Deploy Worker, studio and D1 binding
         working-directory: worker
-        shell: bash
-        run: |
-          set -euo pipefail
-          npx wrangler deploy --secrets-file .secrets.production
+        run: npx wrangler deploy --secrets-file .secrets.production
 
       - name: Apply D1 migrations
         working-directory: worker
         run: npx wrangler d1 migrations apply DB --remote
 
-      - name: Verify Worker health
+      - name: Verify production
         shell: bash
         env:
           WORKER_URL: ${{ steps.worker.outputs.url }}
@@ -169,25 +157,20 @@ jobs:
           set -euo pipefail
           for attempt in 1 2 3 4 5 6 7 8 9 10; do
             if curl -fsS "$WORKER_URL/api/health" | jq -e '.ok == true' >/dev/null; then
-              echo "NOD edge is healthy at $WORKER_URL"
-              exit 0
+              break
+            fi
+            if [ "$attempt" = 10 ]; then
+              echo "Worker health check failed"
+              exit 1
             fi
             sleep 2
           done
-          echo "Worker health check failed"
-          exit 1
-
-      - name: Verify production studio
-        shell: bash
-        env:
-          WORKER_URL: ${{ steps.worker.outputs.url }}
-        run: |
-          set -euo pipefail
           page=$(curl -fsS "$WORKER_URL/")
           printf '%s' "$page" | grep -q 'id="hero-title"'
+          curl -fsS "$WORKER_URL/styles.css" >/dev/null
           curl -fsS "$WORKER_URL/ui-polish.css" >/dev/null
-          curl -fsS "$WORKER_URL/product-runtime.js" >/dev/null
-          echo "NOD studio is live at $WORKER_URL/"
+          curl -fsS "$WORKER_URL/app.js" >/dev/null
+          echo "NOD is healthy at $WORKER_URL/"
 
       - name: Keep GitHub Pages mirror current
         shell: bash
@@ -200,22 +183,20 @@ jobs:
             git fetch origin main
             git reset --hard origin/main
             cp /tmp/nod-config.js docs/config.js
-            cp /tmp/nod-styles.css docs/styles.css
-            cp /tmp/nod-app.js docs/app.js
-            git add docs/config.js docs/styles.css docs/app.js
+            git add docs/config.js
 
             if git diff --cached --quiet; then
               echo "GitHub Pages mirror is already current."
               exit 0
             fi
 
-            git commit -m "Build stable NOD production assets"
+            git commit -m "Sync NOD production endpoint"
             if git push origin HEAD:main; then
               exit 0
             fi
           done
 
-          echo "Could not update production Pages mirror after three attempts."
+          echo "Could not update production endpoint after three attempts."
           exit 1
 
       - name: Remove temporary secret file
@@ -234,7 +215,7 @@ jobs:
             echo "- Canonical app + short links: $WORKER_URL/"
             echo "- API: $WORKER_URL/api"
             echo "- GitHub Pages mirror: https://spairkie.github.io/NOD/"
-            echo "- Turnstile: enabled for both production hosts"
+            echo "- Turnstile: enabled"
             echo "- D1: provisioned and migrated"
-            echo "- Static assets: deployed on Cloudflare edge"
+            echo "- Static assets: served from Cloudflare Workers"
           } >> "$GITHUB_STEP_SUMMARY"
