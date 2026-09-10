@@ -7,7 +7,7 @@
     document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#11120f' : '#f2efe7');
   } catch {}
 
-  for (const file of ['styles.css', 'ui-polish.css', 'netlify-ui.css']) {
+  for (const file of ['styles.css', 'ui-polish.css', 'netlify-ui.css', 'interaction-fixes.css']) {
     const link = document.createElement('link');
     link.rel = 'stylesheet';
     link.href = new URL(file, document.baseURI).href;
