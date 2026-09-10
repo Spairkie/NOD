@@ -1,0 +1,38 @@
+[build]
+  publish = "docs"
+  functions = "netlify/functions"
+
+[functions]
+  node_bundler = "esbuild"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "no-referrer"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=()"
+
+[[redirects]]
+  from = "/api/links/:slug/stats"
+  to = "/.netlify/functions/link-stats?slug=:slug"
+  status = 200
+
+[[redirects]]
+  from = "/api/links/:slug"
+  to = "/.netlify/functions/link-delete?slug=:slug"
+  status = 200
+
+[[redirects]]
+  from = "/api/links"
+  to = "/.netlify/functions/link-create"
+  status = 200
+
+[[redirects]]
+  from = "/api/health"
+  to = "/.netlify/functions/health"
+  status = 200
+
+[[redirects]]
+  from = "/:slug"
+  to = "/.netlify/functions/redirect?slug=:slug"
+  status = 200
