@@ -6,112 +6,93 @@
 
 ![NOD analytics preview](./assets/nod-dashboard.svg)
 
-NOD is a real URL-shortening product with a crafted, zero-dependency front end on GitHub Pages and a Cloudflare Worker + D1 production backend. It creates globally shareable short links, records privacy-aware click analytics, supports custom endings and expiry, and protects public creation with Cloudflare Turnstile plus rate limiting.
+NOD is a production URL shortener and link-intelligence product built on Cloudflare Workers, D1, Turnstile, and static assets. The same Cloudflare deployment serves the studio, API, analytics management surface, and globally shareable redirects.
 
-**Live studio:** https://spairkie.github.io/NOD/
+**Canonical product:** https://nod-edge.saihanswissle.workers.dev/
+
+**GitHub Pages mirror:** https://spairkie.github.io/NOD/
 
 ## Product capabilities
 
-- Globally shareable redirects served from Cloudflare's edge.
+- Real globally shareable redirects served from Cloudflare's edge.
 - D1 persistence for links, click events, and rate-limit state.
-- Custom endings, labels, expiration, and UTM helper.
-- Total clicks, 14-day signal curve, active-link count, device mix, activity pulse, and per-link details.
+- Custom endings, labels, expiration, and UTM source helper.
+- Real click totals, 14-day activity signal, active-link count, device mix, recent activity, and per-link details.
 - Per-link private management keys for statistics and deletion.
 - Cloudflare Turnstile verification on public link creation.
 - Hashed-IP creation rate limiting without persisting raw visitor IPs.
 - Coarse analytics only: timestamp, country, device class, and referrer host.
-- Responsive light/dark UI, command palette, keyboard shortcuts, reduced-motion support, and persistent local workspace state.
-- Automated Cloudflare provisioning and deployment through GitHub Actions.
+- Responsive light/dark UI, command palette, keyboard shortcuts, reduced-motion support, and persistent management state.
+- Automated production deployment through GitHub Actions.
 
 ## Architecture
 
 ```text
 Browser
   │
-  ├── Studio / management UI ──> GitHub Pages
-  │                               https://spairkie.github.io/NOD/
-  │
-  └── Create / stats / redirect ─> Cloudflare Worker: nod-edge
-                                      │
-                                      ├── Turnstile verification
-                                      ├── rate limiting
-                                      └── D1 database
-                                          ├── links
-                                          ├── clicks
-                                          └── rate_limits
+  └── Cloudflare Worker: nod-edge
+        │
+        ├── /                       static NOD studio
+        ├── /<slug>                 server-side redirect
+        ├── /api/*                  create / stats / delete
+        ├── Turnstile               abuse protection
+        ├── rate limiting           hashed client key
+        └── D1
+            ├── links
+            ├── clicks
+            └── rate_limits
+
+GitHub Pages
+  └── read-only deployment mirror of the same studio assets
 ```
+
+Cloudflare Workers Static Assets serves NOD's HTML/CSS/JS when the requested asset exists. Requests such as `/api/links` and `/<slug>` do not match static assets, so they fall through to the Worker script for API handling or redirects. This lets one hostname behave like one coherent product.
 
 ## Repository layout
 
 ```text
-/docs                            GitHub Pages product UI
-  index.html
-  config.js                      Public runtime endpoint config
-  styles-loader.js
-  styles-*.part
-  app-loader.js
-  app-*.part
-/worker                          Cloudflare production service
-  src/index.js
-  migrations/0001_init.sql
-  wrangler.jsonc                 Production Worker configuration
-  wrangler.jsonc.example         Reference configuration
-  package.json                   Pinned Wrangler toolchain
+/docs
+  index.html                    Product UI
+  config.js                     Public production endpoint config
+  styles.css                    Core UI styles
+  ui-polish.css                 Responsive/product UI refinements
+  styles-loader.js              Theme-safe stylesheet bootstrap
+  app.js                        Production-only application runtime
+  app-loader.js                 Stable application bootstrap
+  .assetsignore                 Cloudflare asset exclusions
+/worker
+  src/index.js                  API, redirects, analytics, rate limiting
+  migrations/0001_init.sql      D1 schema
+  wrangler.jsonc                Production Worker + Static Assets config
+  package.json                  Pinned Wrangler toolchain
 /.github/workflows
-  deploy-cloudflare.yml          Provision + migrate + deploy + connect Pages
-/assets                          README preview artwork
-CLOUDFLARE_SETUP.md              One-time production bootstrap
-RESEARCH.md                      Product / architecture research
-SECURITY.md                      Threat model and safe defaults
+  deploy-cloudflare.yml         Validate + deploy + migrate + verify
+/assets                         README artwork
+CLOUDFLARE_SETUP.md            Cloudflare deployment notes
+RESEARCH.md                    Product / architecture research
+SECURITY.md                    Threat model and safe defaults
 README.md
 LICENSE
 ```
 
-The front-end source is loaded from small text chunks so the repository can be safely maintained through the GitHub connector. The loaders concatenate those chunks in the browser before executing the original tested CSS and JavaScript.
+There is no local demo data path in the production application. Links shown in the workspace are links actually created in D1 and managed by access keys stored by the browser. If the production API configuration is missing, creation is disabled rather than falling back to fake/local shortening.
 
 ## Production deployment
 
-GitHub Pages is already the public front end. The remaining one-time step is authorizing GitHub Actions to deploy into your Cloudflare account.
+The repository is already connected to Cloudflare through GitHub Actions. Pushing changes under `docs/`, `worker/`, or the deployment workflow triggers the production deployment.
 
-### 1. Create a scoped Cloudflare API token
+The workflow:
 
-Create a custom token scoped only to the Cloudflare account that will host NOD, with these **Account** permissions:
+1. validates the production JavaScript and static assets;
+2. resolves the account's `workers.dev` hostname;
+3. creates or updates the Turnstile widget for the production hosts;
+4. writes the public runtime config used by the studio;
+5. deploys the Worker, static assets, and D1 binding with Wrangler;
+6. applies D1 migrations;
+7. verifies the health endpoint and production studio assets; and
+8. keeps the GitHub Pages mirror pointed at the same production API.
 
-- **Workers Scripts — Edit**
-- **D1 — Edit**
-- **Turnstile — Edit**
-
-Use a scoped API token, not your Global API Key.
-
-### 2. Add two GitHub Actions secrets
-
-In this repository open:
-
-**Settings → Secrets and variables → Actions → New repository secret**
-
-Add:
-
-- `CLOUDFLARE_ACCOUNT_ID`
-- `CLOUDFLARE_API_TOKEN`
-
-### 3. Run the production workflow
-
-Open:
-
-**Actions → Deploy NOD to Cloudflare → Run workflow**
-
-The workflow automatically:
-
-1. Creates or reuses a managed Turnstile widget for `spairkie.github.io`.
-2. Generates the private rate-limit salt at deploy time.
-3. Deploys `nod-edge` using Wrangler.
-4. Automatically provisions the D1 binding on first deploy.
-5. Applies all D1 migrations.
-6. Resolves and verifies the production `workers.dev` endpoint.
-7. Writes the Worker URL and Turnstile site key to `docs/config.js`.
-8. Commits that public configuration to `main`, causing GitHub Pages to republish in production mode.
-
-See [CLOUDFLARE_SETUP.md](./CLOUDFLARE_SETUP.md) for the exact setup checklist.
+Cloudflare credentials remain in GitHub Actions secrets and are never committed to the repository.
 
 ## Local development
 
@@ -122,7 +103,7 @@ npm install
 npm run dev
 ```
 
-Wrangler provides local resource provisioning for the D1 binding. The static front end can be served with any local static server.
+The browser UI expects a real API endpoint. For local development, point `docs/config.js` at a Wrangler development endpoint rather than enabling a fake data mode.
 
 ## Production security model
 
@@ -133,19 +114,19 @@ Wrangler provides local resource provisioning for the D1 binding. The static fro
 - Public link creation is protected by Turnstile.
 - Creation is rate-limited per hashed client IP; the raw IP is not stored in NOD's database.
 - Analytics store only timestamp, coarse country, device class, and referrer host.
-- CORS is restricted to `https://spairkie.github.io` for browser-based creation.
-- `ALLOWED_HOSTS` can be configured if you want to restrict destinations to trusted domains.
-- Redirects use HTTP 302 so destinations can remain editable without permanent browser caching.
+- Browser creation is restricted to approved production origins.
+- `ALLOWED_HOSTS` can be configured if destination restrictions are needed.
+- Redirects use HTTP 302 so destinations are not permanently cached by browsers.
 
-Read [SECURITY.md](./SECURITY.md) before changing public-creation or destination restrictions.
+Read [SECURITY.md](./SECURITY.md) before relaxing public-creation or destination restrictions.
 
 ## Workspace ownership and backups
 
-NOD is currently designed as a lightweight independent product rather than a multi-user SaaS account system. The D1 database stores the live links, but each browser keeps the private management keys for links it created. Those keys are required for stats and deletion.
+NOD currently uses accountless, per-link ownership instead of user accounts. D1 stores the live links; the browser stores the private management keys needed to retrieve analytics or delete the links it created.
 
-Use **Export private backup** before clearing browser data or moving your management workspace to another device. Treat that backup as sensitive because it contains the management capabilities for your links.
+Use **Back up access keys** before clearing browser data or moving the management workspace to another device. Treat that JSON file as sensitive because those keys authorize management actions.
 
-## Useful keyboard controls
+## Keyboard controls
 
 - `⌘/Ctrl + K` — command palette
 - `⌘/Ctrl + Enter` — create a link
@@ -154,10 +135,15 @@ Use **Export private backup** before clearing browser data or moving your manage
 
 ## Custom short domain
 
-The first production deployment uses the Cloudflare-provided `nod-edge.<account-subdomain>.workers.dev` hostname so the product can go live without a domain purchase.
+`nod-edge.saihanswissle.workers.dev` is the current canonical hostname, so both the studio and short links already share one origin:
 
-For a polished public launch, attach a short custom domain to `nod-edge`, then set `SHORT_DOMAIN` in `docs/config.js` to that hostname. The API can remain on the Worker URL or share the custom hostname.
+```text
+https://nod-edge.saihanswissle.workers.dev/
+https://nod-edge.saihanswissle.workers.dev/NaVAwqJ
+```
+
+When a short custom domain is available, attach it to this Worker as a Cloudflare Custom Domain. The D1 data and redirect architecture do not need to move; only the hostname/origin configuration changes.
 
 ## Research
 
-See [RESEARCH.md](./RESEARCH.md) for the competitive scan, product decisions, GitHub Pages constraint, backend choice, privacy/security model, and primary sources that shaped NOD.
+See [RESEARCH.md](./RESEARCH.md) for the competitive scan and the product, privacy, security, and architecture decisions behind NOD.
