@@ -7,9 +7,11 @@
     document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#11120f' : '#f2efe7');
   } catch {}
 
-  const link = document.createElement('link');
-  link.rel = 'stylesheet';
-  link.href = new URL('styles.css', document.baseURI).href;
-  link.setAttribute('blocking', 'render');
-  document.head.appendChild(link);
+  for (const file of ['styles.css', 'ui-polish.css']) {
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = new URL(file, document.baseURI).href;
+    link.setAttribute('blocking', 'render');
+    document.head.appendChild(link);
+  }
 })();
