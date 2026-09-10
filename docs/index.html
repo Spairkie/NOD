@@ -4,13 +4,22 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#f2efe7" />
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 64 64%27%3E%3Crect width=%2764%27 height=%2764%27 rx=%2716%27 fill=%27%23121310%27/%3E%3Ccircle cx=%2717%27 cy=%2732%27 r=%276%27 fill=%27%23f2efe7%27/%3E%3Ccircle cx=%2732%27 cy=%2732%27 r=%276%27 fill=%27%23ff5b3a%27/%3E%3Ccircle cx=%2747%27 cy=%2732%27 r=%276%27 fill=%27%23f2efe7%27/%3E%3C/svg%3E" />
-  <meta name="description" content="NOD — create short links and understand what happens after the click." />
-  <meta property="og:title" content="NOD — Link Studio" />
+  <meta name="description" content="NOD creates short links and shows what happens after the click." />
+  <meta property="og:title" content="NOD | Link Studio" />
   <meta property="og:description" content="Short links. Long memory." />
-  <title>NOD — Link Studio</title>
-  <script src="./styles-loader.js"></script>
-  <script src="./config.js"></script>
+  <title>NOD | Link Studio</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 64 64%27%3E%3Crect width=%2764%27 height=%2764%27 rx=%2716%27 fill=%27%23121310%27/%3E%3Ccircle cx=%2717%27 cy=%2732%27 r=%276%27 fill=%27%23f2efe7%27/%3E%3Ccircle cx=%2732%27 cy=%2732%27 r=%276%27 fill=%27%23ff5b3a%27/%3E%3Ccircle cx=%2747%27 cy=%2732%27 r=%276%27 fill=%27%23f2efe7%27/%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="./styles.css" />
+  <link rel="stylesheet" href="./ui-polish.css" />
+  <link rel="stylesheet" href="./netlify-ui.css" />
+  <link rel="stylesheet" href="./interaction-fixes.css" />
+  <script>
+    try {
+      const saved = localStorage.getItem('nod.theme.v1');
+      const dark = matchMedia('(prefers-color-scheme: dark)').matches;
+      document.documentElement.dataset.theme = saved || (dark ? 'dark' : 'light');
+    } catch {}
+  </script>
 </head>
 <body>
   <canvas id="flow-field" aria-hidden="true"></canvas>
@@ -44,7 +53,7 @@
       <div class="hero-index">01 / SHORTEN</div>
       <p class="eyebrow"><span class="live-dot"></span> A quiet tool for noisy URLs</p>
       <h1 id="hero-title">Short links.<br><em>Long memory.</em></h1>
-      <p class="hero-copy">Turn unwieldy URLs into clean, memorable paths—then understand what happens after the click.</p>
+      <p class="hero-copy">Turn unwieldy URLs into clean, memorable paths, then understand what happens after the click.</p>
       <a class="text-link" href="#studio">Open the studio <span aria-hidden="true">↘</span></a>
 
       <div class="hero-orbit" aria-hidden="true">
@@ -62,7 +71,7 @@
       <div class="hero-footnote">
         <span>Built for clarity</span>
         <span>Privacy-aware analytics</span>
-        <span>Global edge routing</span>
+        <span>Same-host redirects</span>
       </div>
     </section>
 
@@ -73,9 +82,9 @@
           <p class="eyebrow">Create a path</p>
           <h2 id="studio-title">One field to start.<br>Everything else when you need it.</h2>
         </div>
-        <div class="mode-chip" id="mode-chip" title="Service status">
+        <div class="mode-chip" id="mode-chip" title="Connected to NOD production on Netlify">
           <span class="mode-dot"></span>
-          <span id="mode-label">Connecting…</span>
+          <span id="mode-label">Live · Netlify</span>
         </div>
       </div>
 
@@ -101,7 +110,7 @@
         <div class="advanced-panel" id="advanced-panel" hidden>
           <div class="field-group">
             <label for="custom-slug">Custom ending</label>
-            <div class="prefix-field"><span id="domain-prefix">nod.link/</span><input id="custom-slug" name="slug" maxlength="40" autocomplete="off" placeholder="launch" /></div>
+            <div class="prefix-field"><span id="domain-prefix">n0d.netlify.app/</span><input id="custom-slug" name="slug" maxlength="40" autocomplete="off" placeholder="launch" /></div>
             <small>Letters, numbers, hyphens, underscores.</small>
           </div>
           <div class="field-group">
@@ -132,10 +141,6 @@
             <small>Appends <code>utm_source</code> before shortening.</small>
           </div>
         </div>
-        <div class="turnstile-wrap" id="turnstile-wrap" hidden>
-          <div id="turnstile-widget"></div>
-          <small>Protected from automated abuse by Cloudflare Turnstile.</small>
-        </div>
       </form>
 
       <div class="result-card" id="result-card" hidden aria-live="polite">
@@ -160,6 +165,8 @@
           <h2 id="links-title">A useful signal,<br>not a wall of charts.</h2>
         </div>
         <div class="dashboard-controls">
+          <button class="quiet-btn" id="restore-links" type="button">Restore access keys</button>
+          <input id="restore-links-file" type="file" accept="application/json,.json" hidden />
           <button class="quiet-btn" id="export-links" type="button">Back up access keys</button>
         </div>
       </div>
@@ -184,7 +191,7 @@
           <div class="device-bars" id="device-bars"></div>
         </article>
         <article class="metric-card">
-          <span>Click-through pulse</span>
+          <span>Click pulse</span>
           <strong id="metric-pulse">Quiet</strong>
           <small id="metric-pulse-note">Waiting for activity</small>
           <div class="pulse-dots" id="pulse-dots"></div>
@@ -197,7 +204,7 @@
             <span aria-hidden="true">⌕</span>
             <input id="link-search" type="search" placeholder="Search links, labels, destinations…" aria-label="Search links" />
           </div>
-          <div class="library-meta"><span id="link-count">0 links</span><span class="sample-badge" id="sample-badge">Live workspace</span></div>
+          <div class="library-meta"><span id="link-count">0 links</span></div>
         </div>
         <div class="link-table-head" aria-hidden="true"><span>Link</span><span>Destination</span><span>Clicks</span><span>Created</span><span></span></div>
         <div class="link-list" id="link-list"></div>
@@ -217,16 +224,16 @@
       </div>
       <div class="principles-grid">
         <article><span>01</span><h3>Fast before fancy</h3><p>The first useful action stays obvious. Advanced controls remain one gesture away, not one screen in the way.</p></article>
-        <article><span>02</span><h3>Readable by default</h3><p>Every short link can carry meaning through a deliberate slug, label, and destination preview.</p></article>
-        <article><span>03</span><h3>Measure without spying</h3><p>NOD records coarse country, device, referrer, and time—not visitor IPs in the analytics database.</p></article>
-        <article><span>04</span><h3>Edge by design</h3><p>The studio, redirects, persistence, and click intelligence are delivered from Cloudflare's edge.</p></article>
+        <article><span>02</span><h3>Readable by default</h3><p>Every short link can carry meaning through a deliberate ending, label, and destination preview.</p></article>
+        <article><span>03</span><h3>Measure without spying</h3><p>NOD records coarse country, device, referrer, and time. Raw visitor IP addresses are not stored in click analytics.</p></article>
+        <article><span>04</span><h3>Built to stay simple</h3><p>The studio, redirects, persistent storage, and click intelligence run together on Netlify.</p></article>
       </div>
       <div class="architecture-strip">
-        <div><span>01</span><strong>Static Assets</strong><small>Studio UI</small></div>
+        <div><span>01</span><strong>Static UI</strong><small>Studio</small></div>
         <i>→</i>
-        <div><span>02</span><strong>Cloudflare Worker</strong><small>API + redirects</small></div>
+        <div><span>02</span><strong>Netlify Functions</strong><small>API + redirects</small></div>
         <i>→</i>
-        <div><span>03</span><strong>D1</strong><small>Links + events</small></div>
+        <div><span>03</span><strong>Netlify Blobs</strong><small>Links + events</small></div>
       </div>
     </section>
   </main>
@@ -234,10 +241,10 @@
   <footer class="site-footer">
     <div class="footer-brand">NOD</div>
     <p>Short links, beautifully composed.</p>
-    <div class="footer-meta"><span>Independent product</span><span>Built by Hans Sai</span><a href="#top">Back to top ↑</a></div>
+    <div class="footer-meta"><span>Independent product</span><span>Built by Hans Sai</span><a href="#top" id="back-to-top">Back to top ↑</a></div>
   </footer>
 
-  <dialog class="details-dialog" id="details-dialog" aria-label="Link details">
+  <dialog class="details-dialog" id="details-dialog" aria-label="Link details" aria-modal="true">
     <div class="dialog-shell">
       <button class="dialog-close" id="dialog-close" type="button" aria-label="Close details">×</button>
       <div class="dialog-kicker">LINK DETAILS</div>
@@ -245,7 +252,7 @@
     </div>
   </dialog>
 
-  <dialog class="command-dialog" id="command-dialog" aria-label="Command palette">
+  <dialog class="command-dialog" id="command-dialog" aria-label="Command palette" aria-modal="true">
     <div class="command-shell">
       <div class="command-search"><span aria-hidden="true">⌕</span><input id="command-input" placeholder="Type a command…" autocomplete="off" aria-label="Command search" /></div>
       <div class="command-list" id="command-list"></div>
@@ -254,7 +261,6 @@
   </dialog>
 
   <div class="toast-stack" id="toast-stack" aria-live="polite"></div>
-
-  <script src="./app-loader.js" defer></script>
+  <script src="./app.js" defer></script>
 </body>
 </html>
