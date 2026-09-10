@@ -18,6 +18,6 @@ export default async (request, context) => {
     referrer: referrerHost(request.headers.get('referer') || '')
   };
 
-  context.waitUntil(eventsStore().setJSON(eventKey(slug), event));
+  await eventsStore().setJSON(eventKey(slug), event);
   return Response.redirect(destination, 302);
 };
