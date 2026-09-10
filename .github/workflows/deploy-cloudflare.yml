@@ -143,7 +143,7 @@ jobs:
           TURNSTILE_SITE_KEY: ${{ steps.turnstile.outputs.sitekey }}
         run: |
           set -euo pipefail
-          cat > docs/config.js <<EOF
+          cat > /tmp/nod-config.js <<EOF
           window.__NOD_CONFIG__ = {
             API_BASE_URL: "$WORKER_URL",
             SHORT_DOMAIN: "$WORKER_HOST",
@@ -153,13 +153,26 @@ jobs:
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add docs/config.js
-          if ! git diff --cached --quiet; then
+
+          for attempt in 1 2 3; do
+            git fetch origin main
+            git reset --hard origin/main
+            cp /tmp/nod-config.js docs/config.js
+            git add docs/config.js
+
+            if git diff --cached --quiet; then
+              echo "GitHub Pages is already connected to this Worker."
+              exit 0
+            fi
+
             git commit -m "Connect NOD to Cloudflare production"
-            git push
-          else
-            echo "GitHub Pages is already connected to this Worker."
-          fi
+            if git push origin HEAD:main; then
+              exit 0
+            fi
+          done
+
+          echo "Could not update docs/config.js after three attempts."
+          exit 1
 
       - name: Remove temporary secret file
         if: always()
