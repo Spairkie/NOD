@@ -40,7 +40,7 @@ The UI and short links intentionally share one hostname. There is no separate de
 
 ## Netlify deployment
 
-Import `Spairkie/NOD` from GitHub and use:
+Import `builtbysai/NOD` from GitHub and use:
 
 - **Base directory:** leave blank
 - **Build command:** leave blank
