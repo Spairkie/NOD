@@ -2,9 +2,11 @@
 
 **Short links. Long memory.**
 
-![NOD hero preview](./assets/nod-preview.svg)
+<p align="center"><img src="assets/hero.svg" width="800" alt="NOD Link Studio hero — short links, long memory"></p>
 
-![NOD analytics preview](./assets/nod-dashboard.svg)
+<p align="center"><img src="assets/studio-screenshot.png" width="800" alt="NOD studio: shorten a URL with a single field"></p>
+
+<p align="center"><img src="assets/links-screenshot.png" width="800" alt="NOD link intelligence: click stats, device breakdown, and link search"></p>
 
 NOD is a production URL shortener built as a crafted link studio rather than a generic dashboard. The public app, redirect service, analytics API, and persistent storage run together on Netlify.
 
@@ -71,8 +73,9 @@ The root `netlify.toml` contains the production routing and deployment settings,
   link-delete.js
   redirect.js
 /assets
-  nod-preview.svg
-  nod-dashboard.svg
+  hero.svg
+  studio-screenshot.png
+  links-screenshot.png
 netlify.toml
 package.json
 SECURITY.md

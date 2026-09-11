@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" role="img" aria-labelledby="t d">
+<title id="t">NOD — Link Studio</title>
+<desc id="d">Dark terminal-style hero for NOD: a noisy URL is compressed through a link node into a short n0d.netlify.app path.</desc>
+<defs>
+<radialGradient id="glow" cx="0.72" cy="0.42" r="0.65">
+<stop offset="0" stop-color="#00ff88" stop-opacity="0.10"/>
+<stop offset="1" stop-color="#00ff88" stop-opacity="0"/>
+</radialGradient>
+<pattern id="scan" width="1200" height="4" patternUnits="userSpaceOnUse">
+<rect width="1200" height="1" y="3" fill="#000000" opacity="0.28"/>
+</pattern>
+<pattern id="grid" width="48" height="48" patternUnits="userSpaceOnUse">
+<path d="M48 0H0V48" fill="none" stroke="#123321" stroke-width="1" opacity="0.5"/>
+</pattern>
+<linearGradient id="fade" x1="0" y1="0" x2="1" y2="0">
+<stop offset="0" stop-color="#7a7a72"/>
+<stop offset="1" stop-color="#3a3a35"/>
+</linearGradient>
+</defs>
+<rect x="2" y="2" width="1196" height="626" rx="28" fill="#070b08" stroke="#1d3a26" stroke-width="2"/>
+<rect x="2" y="2" width="1196" height="626" rx="28" fill="url(#grid)" opacity="0.35"/>
+<rect x="2" y="2" width="1196" height="626" rx="28" fill="url(#glow)"/>
+<!-- orbit motif echoing the NOD hero circles -->
+<g fill="none" stroke="#1f3d29" opacity="0.9">
+<circle cx="880" cy="300" r="220" stroke-dasharray="4 10"/>
+<circle cx="880" cy="300" r="150"/>
+<circle cx="880" cy="300" r="82" stroke="#2f5c3a"/>
+</g>
+<circle cx="880" cy="300" r="7" fill="#00ff88"/>
+<circle cx="700" cy="152" r="5" fill="#ff5b3a" opacity="0.9"/>
+<circle cx="1042" cy="438" r="5" fill="#ff5b3a" opacity="0.9"/>
+<text x="108" y="76" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="17" letter-spacing="6" fill="#5da872">LINK STUDIO</text>
+<text x="100" y="212" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="150" font-weight="700" letter-spacing="-8" fill="#33ff66">NOD</text>
+<text x="106" y="300" font-family="Georgia,'Times New Roman',serif" font-size="52" font-style="italic" fill="#e8f0e9">Short links. Long memory.</text>
+<text x="106" y="346" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="20" fill="#7fb58d">Turn unwieldy URLs into clean, memorable paths.</text>
+<!-- noisy url -->
+<rect x="104" y="392" width="520" height="66" rx="12" fill="#0c120d" stroke="#1d3a26"/>
+<text x="128" y="434" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="21" fill="url(#fade)">https://your-very-long-link.com/launch?…</text>
+<text x="700" y="434" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="30" fill="#33ff66">→</text>
+<!-- short link -->
+<rect x="752" y="392" width="344" height="66" rx="12" fill="#0c120d" stroke="#33ff66" stroke-width="1.5"/>
+<text x="780" y="434" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="23" fill="#33ff66">n0d.netlify.app/Ab3xQ7</text>
+<!-- chips -->
+<g font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="17" fill="#8fd49e">
+<rect x="104" y="492" width="196" height="46" rx="23" fill="#0c120d" stroke="#1d3a26"/>
+<text x="132" y="521">302 redirects</text>
+<rect x="316" y="492" width="288" height="46" rx="23" fill="#0c120d" stroke="#1d3a26"/>
+<text x="344" y="521">privacy-aware analytics</text>
+<rect x="620" y="492" width="176" height="46" rx="23" fill="#0c120d" stroke="#1d3a26"/>
+<text x="648" y="521">custom slugs</text>
+</g>
+<text x="106" y="590" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="15" letter-spacing="3" fill="#4a6a54">BUILT BY Hans Sai · NETLIFY</text>
+<rect x="2" y="2" width="1196" height="626" rx="28" fill="url(#scan)"/>
+</svg>
